@@ -123,17 +123,17 @@ uint64_t timeConnect_ = 0;
 
 int16_t titleTextWidth_ = 0;
 
-void avrc_metadata_callback(uint8_t data1, const uint8_t *data2) {
-  //Serial.printf("AVRC metadata rsp: attribute id 0x%x, %s\n", data1, data2);
-  if (data1 == 0x1) {
-    strncpy(metadata.title, (char*)data2, sizeof(metadata.title) - 1);
-  } else if (data1 == 0x2) {
-    strncpy(metadata.artist, (char*)data2, sizeof(metadata.artist) - 1);
-  } else if (data1 == 0x3) {
-    strncpy(metadata.album, (char*)data2, sizeof(metadata.album) - 1);
-  }
-  infoUpdatedFlag_ = true;
-}
+// void avrc_metadata_callback(uint8_t data1, const uint8_t *data2) {
+//   //Serial.printf("AVRC metadata rsp: attribute id 0x%x, %s\n", data1, data2);
+//   if (data1 == 0x1) {
+//     strncpy(metadata.title, (char*)data2, sizeof(metadata.title) - 1);
+//   } else if (data1 == 0x2) {
+//     strncpy(metadata.artist, (char*)data2, sizeof(metadata.artist) - 1);
+//   } else if (data1 == 0x3) {
+//     strncpy(metadata.album, (char*)data2, sizeof(metadata.album) - 1);
+//   }
+//   infoUpdatedFlag_ = true;
+// }
 
 void updateDisplay() {
   display.clearDisplay();
@@ -151,7 +151,6 @@ void updateDisplay() {
 
   //display.display();
 }
-
 
 // Forward declaration of the volume change callback in bluetooth sink mode
 void avrc_volume_change_callback(int vol);
@@ -176,9 +175,10 @@ void showWelcomeMessage() {
  * Displays the current station name contained in 'stationStr_' on the TFT screen.
  */
 void showStation() {
-    display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SH110X_WHITE,0);
+    display.setCursor(0,10);
+    display.print("                        ");
     display.setCursor(0,10);
     if (deviceMode_ == RADIO) {
         display.print("Station: ");
@@ -187,7 +187,19 @@ void showStation() {
         display.print("Bluetooth");
     }
     display.setCursor(0,20);
+    display.print("                        ");
+    display.setCursor(0,30);
+    display.print("                        ");
+    display.setCursor(0,20);
     display.print(stationStr_);
+    if (deviceMode_ == RADIO) {
+        display.setCursor(100,0);
+        display.print("WiFi");
+    }
+    else {
+        display.setCursor(110,0);
+        display.print("BT");
+    }
     display.display();
 }
 
@@ -201,23 +213,35 @@ void showSongInfo() {
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(SH110X_WHITE,0);
-        display.setCursor(128,10);
+        display.setCursor(0,30);
+        display.print("                        ");
+        display.setCursor(0,40);
+        display.print("                        ");
+        display.setCursor(0,30);
         display.print(infoStr_);
         infoUpdatedFlag_ = false; // Clear update flag
+        if (deviceMode_ == RADIO) {
+            display.setCursor(100,0);
+            display.print("WiFi");
+        }
+        else {
+            display.setCursor(110,0);
+            display.print("BT");
+        }
         display.display();
     }
-    else {
-        //Scroll the song title from right to left
-        titlePosX_ -= 6; // Move the sprite to the left by 6 pixels
+    // else {
+    //     //Scroll the song title from right to left
+    //     titlePosX_ -= 6; // Move the sprite to the left by 6 pixels
 
-        //After the sprite has passed by completely...
-        if (titlePosX_ < titleTextWidth_) {
-            titlePosX_ = SCREEN_WIDTH; // ...let the sprite start again at the right side of the screen 
-        }
-        display.setCursor(titlePosX_,10);
-        display.print(infoStr_);
-        display.display();        
-    }
+    //     //After the sprite has passed by completely...
+    //     if (titlePosX_ < titleTextWidth_) {
+    //         titlePosX_ = SCREEN_WIDTH; // ...let the sprite start again at the right side of the screen 
+    //     }
+    //     display.setCursor(titlePosX_,10);
+    //     display.print(infoStr_);
+    //     display.display();        
+    // }
 }
 
 /**
@@ -228,7 +252,9 @@ void showSongInfo() {
 void showVolume(uint8_t volume) {
     display.setTextSize(1);
     display.setTextColor(SH110X_WHITE,0);
-    display.setCursor(0,30);
+    display.setCursor(0,40);
+    display.print("                     ");
+    display.setCursor(0,50);
     display.print("Volume: ");
     display.print(volume);
     display.display();
@@ -379,10 +405,11 @@ void startA2dp() {
 
     a2dp_.set_avrc_metadata_attribute_mask(ESP_AVRC_MD_ATTR_TITLE | ESP_AVRC_MD_ATTR_ARTIST);
     a2dp_.set_avrc_metadata_callback(avrc_metadata_callback);
-    //a2dp_.set_on_connection_state_changed(a2dp_connection_state_changed);
-    //a2dp_.set_on_volumechange(avrc_volume_change_callback);
+    a2dp_.set_on_connection_state_changed(a2dp_connection_state_changed);
+    a2dp_.set_avrc_rn_volumechange(avrc_volume_change_callback);
+    // a2dp_.set_avrc_rn_playstatus_callback(avrc_playstatus_callback);
 
-    //showWelcomeMessage();
+    showWelcomeMessage();
     display.setCursor(0,10);
     display.print(" Starting bluetooth");
 
@@ -718,32 +745,32 @@ void audio_eof_speech(const char *info){
     // Serial.print("eof_speech  ");Serial.println(info);
 }
 
-// void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
-//     switch (id) {
-//         case ESP_AVRC_MD_ATTR_TITLE:
-//             titleStr_ = (char*) text;
-//             break;
+void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
+    switch (id) {
+        case ESP_AVRC_MD_ATTR_TITLE:
+            titleStr_ = (char*) text;
+            break;
         
-//         case ESP_AVRC_MD_ATTR_ARTIST:
-//             artistStr_ = (char*) text;
-//             break;
-//     }    
+        case ESP_AVRC_MD_ATTR_ARTIST:
+            artistStr_ = (char*) text;
+            break;
+    }    
 
-//     if ( artistStr_.isEmpty() ) {
-//         infoStr_ = titleStr_;
-//     }
-//     else {
-//         if ( titleStr_.isEmpty() ) {
-//             infoStr_ = artistStr_;
-//         }
-//         else {
-//             infoStr_ = artistStr_ + " - " + titleStr_;
-//         }
-//     }
+    if ( artistStr_.isEmpty() ) {
+        infoStr_ = titleStr_;
+    }
+    else {
+        if ( titleStr_.isEmpty() ) {
+            infoStr_ = artistStr_;
+        }
+        else {
+            infoStr_ = artistStr_ + " - " + titleStr_;
+        }
+    }
     
-//     infoUpdatedFlag_ = true; // Raise flag for the display update routine
-//     // Serial.printf("==> AVRC metadata rsp: attribute id 0x%x, %s\n", id, text);
-// }
+    infoUpdatedFlag_ = true; // Raise flag for the display update routine
+    // Serial.printf("==> AVRC metadata rsp: attribute id 0x%x, %s\n", id, text);
+}
 
 void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) {
 
@@ -754,6 +781,11 @@ void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) {
         infoUpdatedFlag_ = true; // Raise flag for the display update routine
     }
 }
+
+// void avrc_playstatus_callback(uint8_t status) {
+//     infoStr_ = 
+//     infoUpdatedFlag_ = true; // Raise flag for the display update routine
+// }
 
 void avrc_volume_change_callback(int vol) {
     volumeCurrent_ = vol;
