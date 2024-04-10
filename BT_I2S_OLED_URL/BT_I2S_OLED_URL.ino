@@ -36,7 +36,7 @@ Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 //TEST STATIONS:
 /** Web radio stream URLs */
-const String stationURLs[] = {
+const String stationURLs[] = { //MARK: stationURLs
     "http://streams.radiobob.de/bob-national/mp3-192/streams.radiobob.de/",
     "http://stream.rockantenne.de/rockantenne/stream/mp3",
     "http://wdr-wdr2-ruhrgebiet.icecast.wdr.de/wdr/wdr2/ruhrgebiet/mp3/128/stream.mp3",
@@ -123,34 +123,13 @@ uint64_t timeConnect_ = 0;
 
 int16_t titleTextWidth_ = 0;
 
-// void avrc_metadata_callback(uint8_t data1, const uint8_t *data2) {
-//   //Serial.printf("AVRC metadata rsp: attribute id 0x%x, %s\n", data1, data2);
-//   if (data1 == 0x1) {
-//     strncpy(metadata.title, (char*)data2, sizeof(metadata.title) - 1);
-//   } else if (data1 == 0x2) {
-//     strncpy(metadata.artist, (char*)data2, sizeof(metadata.artist) - 1);
-//   } else if (data1 == 0x3) {
-//     strncpy(metadata.album, (char*)data2, sizeof(metadata.album) - 1);
-//   }
-//   infoUpdatedFlag_ = true;
-// }
 
-void updateDisplay() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SH110X_WHITE,0);
-
-  display.setCursor(0,10);
-  display.print(metadata.title);
-  
-  display.setCursor(0,20);
-  display.print(metadata.artist);
-
-  display.setCursor(0,30);
-  display.print(metadata.album);
-
-  //display.display();
-}
+// Button pin numbers
+const int BUTTON_PIN_1 = 4;
+const int BUTTON_PIN_2 = 5;
+// Button states
+bool buttonState_1 = false;
+bool buttonState_2 = false;
 
 // Forward declaration of the volume change callback in bluetooth sink mode
 void avrc_volume_change_callback(int vol);
@@ -158,10 +137,11 @@ void avrc_volume_change_callback(int vol);
 // Forward declaration of the connection state change callback in bluetooth sink mode
 void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*);
 
+void avrc_metadata_callback(uint8_t id, const uint8_t *text);
 /**
  * Shows a welcome message at startup of the device on the TFT display.
  */
-void showWelcomeMessage() {
+void showWelcomeMessage() { //MARK: showWelcomeMessage
     // Show some information on the startup screen
     display.clearDisplay();
     display.setTextSize(1);
@@ -172,13 +152,26 @@ void showWelcomeMessage() {
 }
 
 /**
- * Displays the current station name contained in 'stationStr_' on the TFT screen.
+ * Displays the volume on the TFT screen.
+ * 
+ * @param volume Volume to be displayed on the TFT screen.
  */
-void showStation() {
+void showVolume(uint8_t volume) { //MARK: showVolume
     display.setTextSize(1);
     display.setTextColor(SH110X_WHITE,0);
-    display.setCursor(0,10);
-    display.print("                        ");
+    display.setCursor(0,0);
+    display.print("Volume: ");
+    display.printf("%3d", volume);
+    display.display();
+}
+
+/**
+ * Displays the current station name contained in 'stationStr_' on the TFT screen.
+ */
+void showStation() { //MARK: showStation
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE,0);
     display.setCursor(0,10);
     if (deviceMode_ == RADIO) {
         display.print("Station: ");
@@ -186,10 +179,6 @@ void showStation() {
     else {
         display.print("Bluetooth");
     }
-    display.setCursor(0,20);
-    display.print("                        ");
-    display.setCursor(0,30);
-    display.print("                        ");
     display.setCursor(0,20);
     display.print(stationStr_);
     if (deviceMode_ == RADIO) {
@@ -207,16 +196,21 @@ void showStation() {
  * Displays the current song information contained in 'infoStr_' on the TFT screen.
  * Each time the song info is updated, it starts scrolling from the right edge.
  */
-void showSongInfo() {
+void showSongInfo() { //MARK: showSongInfo
     // Update the song title if flag is raised
     if (infoUpdatedFlag_) {
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(SH110X_WHITE,0);
-        display.setCursor(0,30);
-        display.print("                        ");
-        display.setCursor(0,40);
-        display.print("                        ");
+        display.setCursor(0,10);
+        if (deviceMode_ == RADIO) {
+            display.print("Station:");
+            display.setCursor(0,20);
+            display.print(stationStr_);
+        }
+        else {
+            display.print("Bluetooth");
+        }
         display.setCursor(0,30);
         display.print(infoStr_);
         infoUpdatedFlag_ = false; // Clear update flag
@@ -229,6 +223,7 @@ void showSongInfo() {
             display.print("BT");
         }
         display.display();
+        showVolume(volumeCurrent_);
     }
     // else {
     //     //Scroll the song title from right to left
@@ -244,31 +239,17 @@ void showSongInfo() {
     // }
 }
 
-/**
- * Displays the volume on the TFT screen.
- * 
- * @param volume Volume to be displayed on the TFT screen.
- */
-void showVolume(uint8_t volume) {
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE,0);
-    display.setCursor(0,40);
-    display.print("                     ");
-    display.setCursor(0,50);
-    display.print("Volume: ");
-    display.print(volume);
-    display.display();
-}
 
-void showPlayState(bool isPlaying) {
-    display.setTextSize(1);
-    display.setCursor(0,0);
 
-    if (isPlaying) {
-        display.print("Playing");
+void showPlayState(bool isConnected) { //MARK: showPlayState
+    display.setTextSize(1);
+    display.setCursor(80,0);
+    display.print("C:");
+    if (isConnected) {
+        display.print("Y");
     }
     else {
-        display.print("Stopped");
+        display.print("N");
     }
     display.display();
 }
@@ -277,12 +258,13 @@ void showPlayState(bool isPlaying) {
  * Connects to the specified WiFi network and starts the device in internet radio mode.
  * Audio task is started.
  */
-void startRadio() {
+void startRadio() { //MARK: startRadio()
     //Serial.print("Begin: free heap = %d, max alloc heap = %d", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     if (pAudio_ == nullptr) {
+        display.clearDisplay();
+        display.setCursor(0,0);
+        display.print("MAC:"); // Own network mac address
         display.setCursor(0,10);
-        display.print(" MAC: "); // Own network mac address
-        display.setCursor(0,20);
         display.print(WiFi.macAddress().c_str());
         Serial.println("MAC: ");
         Serial.print(WiFi.macAddress().c_str());
@@ -302,6 +284,22 @@ void startRadio() {
         WiFi.begin(WifiCredentials::SSID, WifiCredentials::PASSWORD);
         Serial.print("WiFi Connecting");
         while (!WiFi.isConnected()) {
+            readButtonStates();
+
+            if (buttonState_1) {
+                if (deviceMode_ == RADIO) {
+                    EEPROM.writeByte(0, 2); // Enter A2DP mode after restart
+                    EEPROM.commit();
+                    Serial.println("Switching to BT!");
+                    stopRadio(); // Close connections and clean up
+                }
+                else {
+                    EEPROM.writeByte(0, 1); // Enter internet radio mode after restart
+                    EEPROM.commit();
+                    Serial.println("Switching to Radio!");
+                }
+                ESP.restart();
+            }
             delay(100);
             Serial.print("...");
         }
@@ -341,7 +339,7 @@ void startRadio() {
 /**
  * Stops the internet radio including the audio tasks.
  */
-void stopRadio() {
+void stopRadio() { //MARK: stopRadio()
     //Serial.print("Begin : free heap = %d, max alloc heap = %d", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
     if (pAudio_ != nullptr) {
@@ -391,7 +389,7 @@ void stopRadio() {
 /**
  * Starts the device in bluetooth sink (A2DP) mode.
  */
-void startA2dp() {
+void startA2dp() { //MARK: startA2dp
     //Serial.print("Begin: free heap = %d, max alloc heap = %d", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
     i2s_pin_config_t pinConfig = {
@@ -412,18 +410,20 @@ void startA2dp() {
     showWelcomeMessage();
     display.setCursor(0,10);
     display.print(" Starting bluetooth");
-
+    a2dp_.set_auto_reconnect(true, 1000); //Remove this line if you don't want to auto reconnect
     a2dp_.start(deviceName);
     deviceMode_ = A2DP;
     
     esp_bt_controller_status_t btStatus = esp_bt_controller_get_status();
 
     if (btStatus == ESP_BT_CONTROLLER_STATUS_ENABLED) {
-        display.setCursor(0,20);
+        display.clearDisplay();
+        display.setCursor(0,10);
         display.print(" Bluetooth enabled");
         display.display();
     }
     else {
+        display.clearDisplay();
         display.setCursor(0,20);
         display.print(" Bluetooth not enabled");
         display.setCursor(0,30);
@@ -456,7 +456,7 @@ void stopA2dp() {
  * - b = true  --> GPIO_0 = 0 : Shutdown enabled
  * - b = false --> GPIO_0 = 1 : Shutdown disabled
  */
-void setAudioShutdown(bool b) {
+void setAudioShutdown(bool b) { //MARK: setAudioShutdown
     /*
     if (b) {
         gpio_set_level(GPIO_NUM_0, 0); // Enable shutdown circuit
@@ -467,7 +467,7 @@ void setAudioShutdown(bool b) {
     */
 }
 
-void audioProcessing(void *p) {
+void audioProcessing(void *p) { //MARK: audioProcessing
     while (true) {
         if (deviceMode_ != RADIO) {
             vTaskDelay(200 / portTICK_PERIOD_MS);
@@ -534,19 +534,12 @@ void audioProcessing(void *p) {
     }
 }
 
-// Button pin numbers
-const int BUTTON_PIN_1 = 4;
-const int BUTTON_PIN_2 = 5;
-// Button states
-bool buttonState_1 = false;
-bool buttonState_2 = false;
-
-void readButtonStates() {
+void readButtonStates() { //MARK: readButtonStates
   buttonState_1 = digitalRead(BUTTON_PIN_1) == LOW;
   buttonState_2 = digitalRead(BUTTON_PIN_2) == LOW;
 }
 
-void setup() {
+void setup() { //MARK: Setup
 
     pinMode(BUTTON_PIN_1, INPUT_PULLUP);
     pinMode(BUTTON_PIN_2, INPUT_PULLUP);
@@ -606,8 +599,109 @@ void setup() {
 
 }
 
-void loop() {
+
+/* Handle volume control and other commands via serial interface - only for debugging 
+*/
+void handleVolumeControl() { //MARK: handleVolumeControl
+    if (Serial.available()) {
+        char input = Serial.read();
+        if (input == '+') { //MARK: Volume Up
+            // Increase volume
+            if (volumeCurrent_ < 127) {
+                volumeCurrent_++;
+                infoUpdatedFlag_ = true; // Raise flag for the display update routine
+                if (deviceMode_ == A2DP){
+                    a2dp_.set_volume(volumeCurrent_);
+                } else if (deviceMode_ == RADIO) {
+                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                }
+                
+            }
+        } else if (input == '-') { //MARK: Volume Down
+            // Decrease volume
+            if (volumeCurrent_ > 0) {
+                volumeCurrent_--;
+                infoUpdatedFlag_ = true; // Raise flag for the display update routine
+                if (deviceMode_ == A2DP){
+                    a2dp_.set_volume(volumeCurrent_);
+                } else if (deviceMode_ == RADIO) {
+                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                }
+            }
+        } else if (input == 'm') { //MARK: Mute
+            // Mute
+            volumeCurrent_ = 0;
+            infoUpdatedFlag_ = true; // Raise flag for the display update routine
+            if (deviceMode_ == A2DP){
+                a2dp_.set_volume(volumeCurrent_);
+            } else if (deviceMode_ == RADIO) {
+                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+            }
+        } else if (input == 'p') { //MARK: Pause
+            // Play
+            if (deviceMode_ == A2DP){
+                a2dp_.pause();
+            } else if (deviceMode_ == RADIO) {
+                // Stop
+                pAudio_->stopSong();
+                setAudioShutdown(true); // Turn off amplifier
+                stationChangedMute_ = true; // Mute audio until stream becomes stable
+            }
+        } else if (input == 's') { //MARK: Start
+            if (deviceMode_ == A2DP){
+                a2dp_.play();
+            } else if (deviceMode_ == RADIO) {
+                // Start
+                setAudioShutdown(false); // Turn on amplifier
+                stationChangedMute_ = false; // Unmute audio
+                stationChanged_ = true; // Raise flag for the audio task
+                stationUpdatedFlag_ = true; // Raise flag for display update routine
+                infoUpdatedFlag_ = true; // Raise flag for display update routine
+            }
+        } else if (input == 'n') { //MARK: Next
+            // Next
+            if (deviceMode_ == A2DP){
+                a2dp_.next();
+            } else if (deviceMode_ == RADIO) {
+                stationIndex_ = (stationIndex_ + 1) % numStations;
+                stationChanged_ = true; // Raise flag for the audio task
+            }
+        } else if (input == 'b') { //MARK: Previous
+            // Previous
+            if (deviceMode_ == A2DP) {
+                a2dp_.previous();
+            } else if (deviceMode_ == RADIO) {
+                stationIndex_ = (stationIndex_ + numStations - 1) % numStations;
+                stationChanged_ = true; // Raise flag for the audio task
+            }
+        } else if (input == 'r') { //MARK: Restart
+            // Restart
+            ESP.restart();
+        } else if (input == 'w') { //MARK: WiFi
+            // Switch to WiFi mode
+            if (deviceMode_ == A2DP) {
+                EEPROM.writeByte(0, 1); // Enter internet radio mode after restart
+                EEPROM.commit();
+                Serial.println("Switching to Radio!");
+                stopA2dp(); // Close connections and clean up
+            }
+        } else if (input == 'c') { //MARK: Bluetooth
+            // Switch to Bluetooth mode
+            if (deviceMode_ == RADIO) {
+                EEPROM.writeByte(0, 2); // Enter A2DP mode after restart
+                EEPROM.commit();
+                Serial.println("Switching to BT!");
+                stopRadio(); // Close connections and clean up
+            }
+        }
+    }
+}
+
+void loop() { //MARK: loop
     
+    handleVolumeControl();
+        
+
     readButtonStates();
 
     if (buttonState_1) {
@@ -659,7 +753,7 @@ void loop() {
         }
 
         if (connectionError_) {
-            display.setCursor(0,10);
+            display.setCursor(0,30);
             display.println("Stream unavailable");
             vTaskDelay(200 / portTICK_PERIOD_MS); // Wait until next cycle
         }
@@ -699,23 +793,23 @@ void loop() {
 }
 
 
-// optional
-void audio_info(const char *info){
+//MARK: optional functions
+void audio_info(const char *info){ //MARK: audio_info
     //Serial.print("info        "); Serial.println(info);
 }
-void audio_id3data(const char *info){  //id3 metadata
+void audio_id3data(const char *info){  //id3 metadata //MARK: audio_id3data
     // Serial.print("id3data     ");Serial.println(info);
 }
-void audio_eof_mp3(const char *info){  //end of file
+void audio_eof_mp3(const char *info){  //end of file //MARK: audio_eof_mp3
     // Serial.print("eof_mp3     ");Serial.println(info);
 }
-void audio_showstation(const char *info){
+void audio_showstation(const char *info){ //MARK: audio_showstation
     stationStr_ = info;
     stationUpdatedFlag_ = true; // Raise flag for the display update routine
 
     // Serial.print("station     ");Serial.println(info);
 }
-void audio_showstreamtitle(const char *info){
+void audio_showstreamtitle(const char *info){ //MARK: audio_showstreamtitle
     if (deviceMode_ == RADIO) {
         infoStr_ = info;
     }
@@ -729,23 +823,23 @@ void audio_showstreamtitle(const char *info){
 
     // Serial.print("streamtitle ");Serial.println(info);
 }
-void audio_bitrate(const char *info){
+void audio_bitrate(const char *info){ //MARK: audio_bitrate
     // Serial.print("bitrate     ");Serial.println(info);
 }
-void audio_commercial(const char *info){  //duration in sec
+void audio_commercial(const char *info){  //duration in sec //audio_commercial
     // Serial.print("commercial  ");Serial.println(info);
 }
-void audio_icyurl(const char *info){  //homepage
+void audio_icyurl(const char *info){  //homepage //MARK: audio_icyurl
     // Serial.print("icyurl      ");Serial.println(info);
 }
-void audio_lasthost(const char *info){  //stream URL played
+void audio_lasthost(const char *info){  //stream URL played //MARK: audio_lasthost
     // Serial.print("lasthost    ");Serial.println(info);
 }
-void audio_eof_speech(const char *info){
+void audio_eof_speech(const char *info){ //MARK: audio_eof_speech
     // Serial.print("eof_speech  ");Serial.println(info);
 }
 
-void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
+void avrc_metadata_callback(uint8_t id, const uint8_t *text) { //MARK: avrc_metadata_callback
     switch (id) {
         case ESP_AVRC_MD_ATTR_TITLE:
             titleStr_ = (char*) text;
@@ -772,7 +866,7 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
     // Serial.printf("==> AVRC metadata rsp: attribute id 0x%x, %s\n", id, text);
 }
 
-void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) {
+void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) { //MARK: a2dp_connection_state_changed
 
     //Serial.print("Connection state: %d", state);
 
@@ -787,7 +881,7 @@ void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) {
 //     infoUpdatedFlag_ = true; // Raise flag for the display update routine
 // }
 
-void avrc_volume_change_callback(int vol) {
+void avrc_volume_change_callback(int vol) { //MARK: avrc_volume_change_callback
     volumeCurrent_ = vol;
     volumeCurrentChangedFlag_ = true;
 }
