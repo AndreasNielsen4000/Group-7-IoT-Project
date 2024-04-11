@@ -7,6 +7,8 @@
 //#include <WiFi.h>
 #include "Audio.h"
 #include <EEPROM.h>
+#define _TIMERINTERRUPT_LOGLEVEL_     3
+#include "ESP32_New_TimerInterrupt.h"
 
 #define I2S_BCK_PIN 13
 #define I2S_WS_PIN 27
@@ -14,6 +16,40 @@
 #define SAMPLE_RATE 44100
 #define BITS 16
 #define CHANNELS 2
+
+#define PIN_LED 0
+#define PIN_PSU_EN 33
+#define PIN_BTN 35
+#define PIN_ENC_A 27
+#define PIN_ENC_B 14
+#define PIN_LED_R 32
+#define PIN_LED_G 15
+#define PIN_LED_B 5
+#define PIN_I2C_SDA 21
+#define PIN_I2C_SCL 22
+#define PIN_AMP_EN 2
+
+#define PD_I2C_ADR  0x28   //0101000
+#define PD_I2C_FREQ 100000 //kb/s
+
+#define TIMER_0_INTERVAL 1000000 //Blink & Tick interval (µs)
+#define TIMER_3_INTERVAL 50000 //Power button refresh rate (µs)
+
+#define PWM_FREQ 5000 //Hz
+#define PWM_CNL_R 0 //Channel (0-16)
+#define PWM_CNL_G 1 
+#define PWM_CNL_B 3 
+#define PWM_RES 8 //Resoluion (0-16 Bit)
+
+#define ENC_VEL 5 //Encoder velocity
+
+#define SW_THRESHOLD 300
+
+#define BTN_SINGLE_PRESS 20
+// #define BTN_LONG_PRESS 25 
+
+ESP32Timer Timer0(0); //4 timers are available (from 0 to 3)
+ESP32Timer Timer3(3);
 
 struct Metadata {
   char title[100];
@@ -24,6 +60,19 @@ struct Metadata {
 const char* deviceName = "BT-WiFi-I2S-OLED";
 
 const uint8_t volumeMax = 21;
+
+static volatile char ENC_COUNT = 0;
+static volatile long tick = 0; //Seconds from power on
+static volatile bool encA = false;
+static volatile bool encB = false;
+static volatile bool ampMode = false;
+static volatile bool chgMode = false;
+
+/*Interrupt Handlers*/
+bool IRAM_ATTR Timer0_ISR(void * timerNo);
+bool IRAM_ATTR Timer3_ISR(void * timerNo);
+void IRAM_ATTR encA_ISR();
+void IRAM_ATTR encB_ISR();
 
 //128x64 display
 
@@ -60,12 +109,15 @@ Metadata metadata;
 BluetoothA2DPSink a2dp_;
 
 // Enumeration with possible device modes
-enum DeviceMode {NONE = 0, RADIO = 1, A2DP = 2};
+enum DeviceMode {RADIO = 0, A2DP = 1, A2DP = 2, CHG = 3};
 
 typedef enum DeviceMode t_DeviceMode;
 
 // Current device mode (initialization as 'RADIO')
-t_DeviceMode deviceMode_ = RADIO;
+t_DeviceMode deviceMode_ = NONE;
+
+// MOD_IN true if bluetooth mode
+static volatile bool MOD_IN_ = false;
 
 // Content in audio buffer (provided by esp32-audioI2S library)
 uint32_t audioBufferFilled_ = 0;
@@ -123,13 +175,86 @@ uint64_t timeConnect_ = 0;
 
 int16_t titleTextWidth_ = 0;
 
+uint16_t holdCounter_ = 0;
 
-// Button pin numbers
-const int BUTTON_PIN_1 = 4;
-const int BUTTON_PIN_2 = 5;
-// Button states
-bool buttonState_1 = false;
-bool buttonState_2 = false;
+bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
+  /*Blink */
+  static bool ledToggle = 0;
+  digitalWrite(PIN_LED,ledToggle);
+  ledToggle=!ledToggle;
+  /*Tick*/
+  tick++;
+  return true;
+}
+
+bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
+    /*Power logic*/ 
+    bool BTN_IN = analogRead(PIN_BTN) >= SW_THRESHOLD;
+    if (deviceMode_ == RADIO && !BTN_IN && holdCounter > 0 && holdCounter >= BTN_SINGLE_PRESS) {
+        deviceMode_ = A2DP;
+        holdCounter = 0;
+        //Change mode
+    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter > 0 && holdCounter >= BTN_SINGLE_PRESS) {
+        deviceMode_ = RADIO;
+
+        holdCounter = 0;
+        //Change mode
+    } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter > 0 && holdCounter < BTN_SINGLE_PRESS) {
+        //Change mode
+        deviceMode_ = CHG;
+        holdCounter = 0;
+    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter > 0 && holdCounter < BTN_SINGLE_PRESS) {
+        //Change mode
+        deviceMode_ = CHG;
+        holdCounter = 0;
+    } else if (deviceMode_ == CHG && BTN_IN) {
+        //Change mode
+        deviceMode_ = MOD_IN_;
+        holdCounter = 0;
+    } else if (deviceMode_ != CHG && BTN_IN) {
+        holdCounter_++;
+    } else if (deviceMode_ == NONE && BTN_IN) {
+        deviceMode_ = MOD_IN_;
+        holdCounter = 0;
+    } else if (deviceMode_ == NONE && CHG_IN) { //MARK: TODO: CHG_IN -> DC_IN
+        deviceMode_ = CHG;  //MARK: DEF: DC_IN
+    } else if (deviceMode_ == CHG && !CHG_IN) { //MARK: TODO: CHG_IN -> DC_IN
+        digitalWrite(PIN_PSU_EN,LOW);
+        deviceMode_ = NONE;
+    } else {
+        holdCounter_ = 0;
+    }
+    return true;
+}
+
+
+void IRAM_ATTR encA_ISR(){ //~7us //MARK: encA_ISR
+  detachInterrupt(digitalPinToInterrupt(PIN_ENC_A));
+  encB = digitalRead(PIN_ENC_B);
+  if(encB){
+    attachInterrupt(digitalPinToInterrupt(PIN_ENC_B), encB_ISR, FALLING);
+  }
+  else{
+    attachInterrupt(digitalPinToInterrupt(PIN_ENC_B), encB_ISR, RISING);
+  }
+  if(encA != encB){
+    ENC_COUNT+=ENC_VEL;
+  }
+}
+
+void IRAM_ATTR encB_ISR(){ //~7us //MARK: encB_ISR
+  detachInterrupt(digitalPinToInterrupt(PIN_ENC_B));
+  encA = digitalRead(PIN_ENC_A);
+  if(encA){
+    attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encA_ISR, FALLING);
+  }
+  else{
+    attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encA_ISR, RISING);
+  }
+  if(encA != encB){
+    ENC_COUNT-=ENC_VEL;
+  }
+}
 
 // Forward declaration of the volume change callback in bluetooth sink mode
 void avrc_volume_change_callback(int vol);
@@ -284,17 +409,17 @@ void startRadio() { //MARK: startRadio()
         WiFi.begin(WifiCredentials::SSID, WifiCredentials::PASSWORD);
         Serial.print("WiFi Connecting");
         while (!WiFi.isConnected()) {
-            readButtonStates();
-
+            readEncState();
+            //MARK: CHANGE HERE
             if (buttonState_1) {
                 if (deviceMode_ == RADIO) {
-                    EEPROM.writeByte(0, 2); // Enter A2DP mode after restart
+                    EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
                     EEPROM.commit();
                     Serial.println("Switching to BT!");
                     stopRadio(); // Close connections and clean up
                 }
                 else {
-                    EEPROM.writeByte(0, 1); // Enter internet radio mode after restart
+                    EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
                     EEPROM.commit();
                     Serial.println("Switching to Radio!");
                 }
@@ -534,17 +659,30 @@ void audioProcessing(void *p) { //MARK: audioProcessing
     }
 }
 
-void readButtonStates() { //MARK: readButtonStates
-  buttonState_1 = digitalRead(BUTTON_PIN_1) == LOW;
-  buttonState_2 = digitalRead(BUTTON_PIN_2) == LOW;
+void readEncState() { //MARK: readEncState
+
 }
 
 void setup() { //MARK: Setup
 
-    pinMode(BUTTON_PIN_1, INPUT_PULLUP);
-    pinMode(BUTTON_PIN_2, INPUT_PULLUP);
+    pinMode(PIN_PSU_EN,OUTPUT);
+    //Enable PSU latch
+    digitalWrite(PIN_PSU_EN,HIGH);
+    pinMode(PIN_BTN,INPUT);
+    chgMode = true;
+    
 
+    /*Blink setup*/
+    pinMode(PIN_LED, OUTPUT);
+    Timer0.attachInterruptInterval(TIMER_0_INTERVAL, Timer0_ISR);
 
+    /*Encoder Interrupt setup*/
+    pinMode(PIN_ENC_A,INPUT);
+    pinMode(PIN_ENC_B,INPUT);
+    attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encA_ISR, RISING);
+
+    delay(1);
+    
     /*
     // Setup GPIO ports for SPK hat
     gpio_set_direction(GPIO_NUM_0, GPIO_MODE_OUTPUT); // Shutdown circuit of M5Stack SPK hat
@@ -568,35 +706,45 @@ void setup() { //MARK: Setup
     }
 
     if ( EEPROM.begin(1) ) {
-        uint8_t mode = EEPROM.readByte(0);
-
+        //uint8_t mode = EEPROM.readByte(0);
+        MOD_IN_ = EEPROM.readByte(0);
         //Serial.print("EEPROM.readByte(0) = %d", mode);
-
-        if (mode == 2) {
-          display.clearDisplay();
-          display.setTextSize(1);
-          display.setTextColor(SH110X_WHITE,0);
-          display.setCursor(0,25);
-          display.print("I2S BT");
-          display.display();
-          startA2dp();
+        Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
+        //MARK: TIMER3
+        while (deviceMode_ == NONE) {
+            delay(1);
         }
-        else {
-          display.clearDisplay();
-          display.setTextSize(1);
-          display.setTextColor(SH110X_WHITE,0);
-          display.setCursor(0,25);
-          display.print("I2S URL");
-          display.display();
+        if (deviceMode_ == 2) {
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setTextColor(SH110X_WHITE,0);
+            display.setCursor(0,25);
+            display.print("I2S BT");
+            display.display();
+            startA2dp();
+        }
+        else if (deviceMode_ == 1) {
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setTextColor(SH110X_WHITE,0);
+            display.setCursor(0,25);
+            display.print("I2S URL");
+            display.display();
             startRadio();
-        }
+        } else if (deviceMode_ == 3) {
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setTextColor(SH110X_WHITE,0);
+            display.setCursor(0,25);
+            display.print("I2S CHG");
+            display.display();
+        }   
     }
     else {
         //log_w("EEPROM.begin() returned 'false'!");
+        Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
         startRadio();
     }
-
-
 }
 
 
@@ -680,7 +828,7 @@ void handleVolumeControl() { //MARK: handleVolumeControl
         } else if (input == 'w') { //MARK: WiFi
             // Switch to WiFi mode
             if (deviceMode_ == A2DP) {
-                EEPROM.writeByte(0, 1); // Enter internet radio mode after restart
+                EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
                 EEPROM.commit();
                 Serial.println("Switching to Radio!");
                 stopA2dp(); // Close connections and clean up
@@ -688,7 +836,7 @@ void handleVolumeControl() { //MARK: handleVolumeControl
         } else if (input == 'c') { //MARK: Bluetooth
             // Switch to Bluetooth mode
             if (deviceMode_ == RADIO) {
-                EEPROM.writeByte(0, 2); // Enter A2DP mode after restart
+                EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
                 EEPROM.commit();
                 Serial.println("Switching to BT!");
                 stopRadio(); // Close connections and clean up
@@ -702,17 +850,17 @@ void loop() { //MARK: loop
     handleVolumeControl();
         
 
-    readButtonStates();
+    readEncState();
 
     if (buttonState_1) {
         if (deviceMode_ == RADIO) {
-            EEPROM.writeByte(0, 2); // Enter A2DP mode after restart
+            EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
             EEPROM.commit();
             Serial.println("Switching to BT!");
             stopRadio(); // Close connections and clean up
         }
         else {
-            EEPROM.writeByte(0, 1); // Enter internet radio mode after restart
+            EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
             EEPROM.commit();
             Serial.println("Switching to Radio!");
         }

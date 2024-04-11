@@ -46,6 +46,8 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo);
 void IRAM_ATTR encA_ISR();
 void IRAM_ATTR encB_ISR();
 
+
+
 bool IRAM_ATTR Timer0_ISR(void * timerNo){
   /*Blink */
   static bool ledToggle = 0;
@@ -104,6 +106,8 @@ void IRAM_ATTR encB_ISR(){ //~7us
     ENC_COUNT-=ENC_VEL;
   }
 }
+
+//MARK: Imported
 
 void setup() {
   /*Power switch setup*/
