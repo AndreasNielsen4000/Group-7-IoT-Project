@@ -609,9 +609,9 @@ void handleVolumeControl() { //MARK: handleVolumeControl
             // Increase volume
             if (volumeCurrent_ < 127) {
                 volumeCurrent_++;
-                infoUpdatedFlag_ = true; // Raise flag for the display update routine
                 if (deviceMode_ == A2DP){
                     a2dp_.set_volume(volumeCurrent_);
+                    showVolume(volumeCurrent_);
                 } else if (deviceMode_ == RADIO) {
                     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
                 }
@@ -621,9 +621,9 @@ void handleVolumeControl() { //MARK: handleVolumeControl
             // Decrease volume
             if (volumeCurrent_ > 0) {
                 volumeCurrent_--;
-                infoUpdatedFlag_ = true; // Raise flag for the display update routine
                 if (deviceMode_ == A2DP){
                     a2dp_.set_volume(volumeCurrent_);
+                    showVolume(volumeCurrent_);
                 } else if (deviceMode_ == RADIO) {
                     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
                 }
