@@ -1,0 +1,51 @@
+Reference	Value	Footprint	Qty	MPN	Description
+C29,C30	12p	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	2	CL10C120JB8NNNC	MLCC 50V 5% C0G
+C28	100p	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	1	CL10C101JB8NNND	MLCC 50V 5% C0G
+C14,C16,C27,C64,C65,C76	2.2n	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	6	CL10B222KB8NNND	MLCC 50V 10% X7R
+C13	33n	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	1	CL10B333KB8NNNC	MLCC 50V 10% X7R
+C1,C2,C4,C5,C6,C8,C9,C12,C15,C17,C21,C22,C49,C61,C62,C68,C69,C70,C71,C72,C73,C74,C75	100n	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	23	CL10B104JB8NNNC	MLCC 50V 5% X7R
+C45,C46,C47,C48	220n	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	4	CL10B224KB8NNNC	MLCC 50V 5% X7R
+C52,C53,C54,C55	470n	Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder	4	CL21B474KBFNNNE	MLCC 50V 10% X7R
+C18,C19,C20,C23,C25,C26,C31	1u	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	7	CL10A105KB8NNNC	MLCC 50V 10% X5R
+C10,C11	2.2u	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	2	CL10A225KP8NNNC	MLCC 10V 10% X5R
+C7	4.7u	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	1	GRM188R6YA475KE15J	MLCC 35V 10% X5R
+L1,L2,L3,L4,L5	10uH	0_Costum:1274AS	5	DD1274AS-H-100M=P3	Power inductor SMD 4.4A 20%
+C3,C24,C32,C33,C34,C35,C36,C37,C38,C39,C40,C41,C42,C43,C44,C50,C51,C56,C57,C58,C59,C60,C63,C66,C67	10u	Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder	25	CL31B106KBHNNNE	MLCC 50V 10% X7R
+Y1	16 MHz	Crystal:Crystal_SMD_2520-4Pin_2.5x2.0mm	1	ECS-160-10-36-CKM-TR3	
+R24,R25	470R	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	2	CRCW0603470RFKEA	Thick Film Resistor 1/10watt 1%
+R10,R21,R22,R26,R27,R31,R32	2k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	7	CRCW06032K00FKEC	Thick Film Resistor 1/10watt 1%
+R4,R5	5.1k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	2	CRCW06035K10FKEA	Thick Film Resistor 1/10watt 1%
+R34	5.6k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW06035K60FKEA	Thick Film Resistor 1/10watt 1%
+R15,R16,R17,R19,R20	10k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	5	CRCW060310K0FKEC 	Thick Film Resistor 1/10watt 1%
+R8,R23,R29,R37	22k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	4	CRCW060322K0FKEA	Thick Film Resistor 1/10watt 1%
+R9	47.5k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW060347K5FKEA	Thick Film Resistor 1/10watt 1%
+R36	51k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW060351K0FKEA	Thick Film Resistor 1/10watt 1%
+R3,R12,R13,R14,R35	100k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	5	CRCW0603100KFKEA	Thick Film Resistor 1/10watt 1%
+R7	200k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW0603200KFKEA	Thick Film Resistor 1/10watt 1%
+R1,R2,R6,R11,R30,R38	1M	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	6	CRCW06031M00FKEC	Thick Film Resistor 1/10watt 1%
+R28,R33,R39,R40	(NC)	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	4		
+D10,D11,D12	1N4148W	Diode_SMD:D_SOD-123	3		
+U5	2450BM14E0002T	Snapeda:2450BM14E0003T_JOT-L	1	2450BM14A0002T	
+Q1,Q2	BC817	Package_TO_SOT_SMD:SOT-23	2	BC817-QR	NPN transistor, base/emitter/collector
+SW2	BOOT	Button_Switch_SMD:Panasonic_EVQPUK_EVQPUB	1	EVQ-PUK02K	Tactile Switch
+J2,J3,J4,J5	Conn_01x04	Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical	4		Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)
+U2	CP2102N-Axx-xQFN28	Package_DFN_QFN:QFN-28-1EP_5x5mm_P0.5mm_EP3.35x3.35mm	1	CP2102N-A02-GQFN28	USB to UART master bridge, QFN-28
+SW3	EN	Button_Switch_SMD:Panasonic_EVQPUK_EVQPUB	1	EVQ-PUK02K	Tactile Switch
+U1	ESP32-WROOM-32E	RF_Module:ESP32-WROOM-32D	1	ESP32-WROOM-32E-N16	RF Module, ESP32-D0WD-V3 SoC, without PSRAM, Wi-Fi 802.11b/g/n, Bluetooth, BLE, 32-bit, 2.7-3.6V, onboard antenna, SMD
+H1,H2,H3,H4	Hole	MountingHole:MountingHole_3.2mm_M3_DIN965_Pad	4		Mounting Hole with connection
+JP1	Jumper	Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm	1		3-pole Solder Jumper, pins 1+2 closed/bridged
+D9	LED_amber	LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder	1	150060YS75000 	
+D8,D13	LED_green	LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder	2	150060GS75000 	
+D14	LED_red	LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder	1	150060RS75000 	
+U7	LMR51430	Package_TO_SOT_SMD:SOT-23-6	1	LMR51430YDDCR	4.5-V to 36-V, 3-A synchronous buck converter with 40-µA IQ, SOT-23-6
+AE1	MIFA	RF_Antenna:Texas_SWRA117D_2.4GHz_Right	1		Antenna with extra pin for shielding
+U4	nRF24L01P	Package_DFN_QFN:QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm	1	nRF24L01P	nRF24L01+, Ultra low power 2.4GHz RF Transceiver, QFN20 4x4mm
+U3	PCM5101A	Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm	1	PCM5101AQPWRQ1 	2.1 VRMS, 106dB Audio Stereo DAC with PLL and 32-bit, 384kHz PCM Interface, TSSOP-20
+D1,D2,D3,D5,D6	PMEG60T	Diode_SMD:Nexperia_CFP3_SOD-123W	5	PMEG60T30ELRX	
+D4,D15	PMEG3020ER	Diode_SMD:Nexperia_CFP3_SOD-123W	2	PMEG3020ER,115	
+D7	RGB LED	0_Costum:RGB_LED	1		
+SW1	Rotary Encoder	0_Costum:EC11_RotaryEncoder	1		
+SW4	SW_DIP_x02	Button_Switch_SMD:SW_DIP_SPSTx02_Slide_6.7x6.64mm_W8.61mm_P2.54mm_LowProfile	1	219-2MST	2x DIP Switch, Single Pole Single Throw (SPST) switch, small symbol
+J6,J7	Terminal	TerminalBlock:TerminalBlock_bornier-2_P5.08mm	2		Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)
+U6	TPA3128	0_Costum:DAP32_4P36X4P11_TEX	1	TPA3128D2DAPR 	
+J1	USB_C_Receptacle	Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal	1	USB4105-GF-A-120	USB 2.0-only 16P Type-C Receptacle connector

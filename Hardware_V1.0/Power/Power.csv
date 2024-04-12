@@ -1,0 +1,42 @@
+Reference	Value	Footprint	Qty	MPN	Description
+B3	~	0_Costum:BLM_18650x3	1		
+C1,C2,C3,C4,C5,C8,C9,C10,C16,C17,C18,C25,C27,C28,C29,C30	100n	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	16	CL10B104JB8NNNC	MLCC 50V 5% X7R
+C6,C7,C12,C13,C14,C15,C22,C24,C26,C35	1u	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	10	CL10A105KB8NNNC	MLCC 50V 10% X5R
+C11	4.7u	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	1	GRM188R6YA475KE15J	MLCC 35V 10% X5R
+C19,C20,C21,C31,C33,C34	10u	Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder	6	CL31B106KBHNNNE	MLCC 50V 10% X7R
+C23	33n	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	1	CL10B333KB8NNNC	MLCC 50V 10% X7R
+C32	22p	Capacitor_SMD:C_0603_1608Metric_Pad1.08x0.95mm_HandSolder	1	CL10C220JB8NNNC	MLCC 50V 5% C0G
+D1,D8	PMEG60T	Diode_SMD:Nexperia_CFP3_SOD-123W	2	PMEG60T30ELRX	
+D2,D3,D4	ESDA25P35	Snapeda:QFN1610_STM-L	3	ESDA25P35-1U1M	
+D5,D7	LED_green	LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder	2	 150060GS75000 	
+D6	LED_amber	LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder	1	150060YS75000	
+D9,D10	PMEG3020ER	Diode_SMD:Nexperia_CFP3_SOD-123W	2	PMEG3020ER,115	
+D11	ESDA25W	Package_TO_SOT_SMD:SOT-323_SC-70_Handsoldering	1	ESDA25W	TVS Diode Array
+H1,H2,H3,H4	Hole	MountingHole:MountingHole_3.2mm_M3_DIN965_Pad	4		Mounting Hole with connection
+J1,J8,J9,J10,J11	Conn_01x04	-- mixed values --	5	-- mixed values --	-- mixed values --
+J2	(NC)	Connector_BarrelJack:BarrelJack_Wuerth_694106106102_2.0x5.5mm	1	694106106102	DC Barrel Jack with an internal switch
+J5	Barrel_Jack_Switch	Connector_BarrelJack:BarrelJack_Wuerth_694106106102_2.0x5.5mm	1	694106106102	DC Barrel Jack with an internal switch
+J6	USB_C_Receptacle_USB2.0_16P	Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal	1	USB4105-GF-A-120	USB 2.0-only 16P Type-C Receptacle connector
+L1	10uH	0_Costum:1274AS	1	DD1274AS-H-100M=P3	Power inductor SMD 4.4A 20%
+Q1,Q3,Q9,Q10	SiRA88DP	Package_SO:PowerPAK_SO-8_Single	4	SIRA88DP-T1-GE3	
+Q2,Q4	Si2369DS	Package_TO_SOT_SMD:SOT-23	2	SI2369DS-T1-GE3	
+Q6,Q7,Q8,Q11	SiS413DN	Package_SO:Vishay_PowerPAK_1212-8_Single	4	SIS413DN-T1-GE3	
+R1,R22,R23,R40	5.1k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	4	CRCW06035K10FKEA	Thick Film Resistor 1/10watt 1%
+R2,R3,R4,R5,R8,R10,R30,R44	100R	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	8	CRCW0603100RFKEC	Thick Film Resistor 1/10watt 1%
+R6,R20,R25,R37,R48	1k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	5	CRCW06031K00FKEC	Thick Film Resistor 1/10watt 1%
+R7,R12,R13,R15,R21,R35,R42	10k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	7	CRCW060310K0FKEC 	Thick Film Resistor 1/10watt 1%
+R11,R17,R18,R49	1M	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	4	CRCW06031M00FKEC	Thick Film Resistor 1/10watt 1%
+R14	750k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW0603750KFKEA 	Thick Film Resistor 1/10watt 1%
+R16,R46	430k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	2	CRCW0603430KFKEA	Thick Film Resistor 1/10watt 1%
+R19	8m	0_Costum:SenseResistor_1206	1	MSMA1206R0080FCM	Current sense resistor 1W 1% 50 PPM/C
+R24	470R	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW0603470RFKEC	Thick Film Resistor 1/10watt 1%
+R28,R34,R36,R39,R41	100k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	5	CRCW0603100KFKEA	Thick Film Resistor 1/10watt 1%
+R29	22k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW060322K0FKEA	Thick Film Resistor 1/10watt 1%
+R38	10R	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW060310R0FKEC	Thick Film Resistor 1/10watt 1%
+R43,R47	10m	0_Costum:SenseResistor_1206	2	MFSA1206R0100FCM	Current sense resistor 1W 1% 50 PPM/C
+R45	9.1k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW06039K10FKEA	Thick Film Resistor 1/10watt 1%
+R50	200k	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	1	CRCW0603200KFKEA	Thick Film Resistor 1/10watt 1%
+TH1,TH3	NCP18XH103	Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder	2	NCP18XH103F03RB	
+U1	TAS:BQ7791500	Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm	1	BQ7791500PWR	
+U2	STUSB4500	Package_DFN_QFN:QFN-24-1EP_4x4mm_P0.5mm_EP2.7x2.7mm	1	STUSB4500QTR	
+U3	BQ24617	Package_DFN_QFN:QFN-24-1EP_4x4mm_P0.5mm_EP2.15x2.15mm_ThermalVias	1	BQ24617RGER	
