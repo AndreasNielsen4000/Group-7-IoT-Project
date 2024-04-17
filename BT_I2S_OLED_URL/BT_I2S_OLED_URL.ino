@@ -9,10 +9,11 @@
 #include <EEPROM.h>
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
+//#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
 
 #define I2S_BCK_PIN 13
-#define I2S_WS_PIN 27
-#define I2S_DOUT_PIN 14
+#define I2S_WS_PIN 26
+#define I2S_DOUT_PIN 25
 #define SAMPLE_RATE 44100
 #define BITS 16
 #define CHANNELS 2
@@ -28,6 +29,8 @@
 #define PIN_I2C_SDA 21
 #define PIN_I2C_SCL 22
 #define PIN_AMP_EN 2
+
+#define PD_MUTE 12 //MARK: PD_MUTE - CHECK
 
 #define PD_I2C_ADR  0x28   //0101000
 #define PD_I2C_FREQ 100000 //kb/s
@@ -68,7 +71,7 @@ static volatile bool encB = false;
 static volatile bool ampMode = false;
 static volatile bool chgMode = false;
 
-/*Interrupt Handlers*/
+// /*Interrupt Handlers*/
 bool IRAM_ATTR Timer0_ISR(void * timerNo);
 bool IRAM_ATTR Timer3_ISR(void * timerNo);
 void IRAM_ATTR encA_ISR();
@@ -109,12 +112,15 @@ Metadata metadata;
 BluetoothA2DPSink a2dp_;
 
 // Enumeration with possible device modes
-enum DeviceMode {RADIO = 0, A2DP = 1, A2DP = 2, CHG = 3};
+enum DeviceMode {RADIO = 0, A2DP = 1, CHG = 2, NONE = 3};
 
 typedef enum DeviceMode t_DeviceMode;
 
 // Current device mode (initialization as 'RADIO')
 t_DeviceMode deviceMode_ = NONE;
+
+// Flag indicating that deviceMode has changed
+bool deviceModeChanged_ = false;
 
 // MOD_IN true if bluetooth mode
 static volatile bool MOD_IN_ = false;
@@ -159,7 +165,7 @@ bool infoUpdatedFlag_ = false;
 int16_t titlePosX_ = SCREEN_WIDTH;
 
 // Audio volume to be set by the audio task
-uint8_t volumeCurrent_ = 0;
+int16_t volumeCurrent_ = 0;
 
 // Volume as float value for fading
 float_t volumeCurrentF_ = 0.0f;
@@ -176,6 +182,11 @@ uint64_t timeConnect_ = 0;
 int16_t titleTextWidth_ = 0;
 
 uint16_t holdCounter_ = 0;
+int8_t volumeChange_ = 0;
+
+bool DC_IN = true; //MARK: DC_IN PLACEHOLDER!
+
+bool display_present = false; //MARK: display_present
 
 bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
   /*Blink */
@@ -190,37 +201,45 @@ bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
     bool BTN_IN = analogRead(PIN_BTN) >= SW_THRESHOLD;
-    if (deviceMode_ == RADIO && !BTN_IN && holdCounter > 0 && holdCounter >= BTN_SINGLE_PRESS) {
-        deviceMode_ = A2DP;
-        holdCounter = 0;
-        //Change mode
-    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter > 0 && holdCounter >= BTN_SINGLE_PRESS) {
-        deviceMode_ = RADIO;
 
-        holdCounter = 0;
+    if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
+        deviceMode_ = A2DP;
+        holdCounter_ = 0;
+        deviceModeChanged_ = true;
         //Change mode
-    } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter > 0 && holdCounter < BTN_SINGLE_PRESS) {
+    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
+        deviceMode_ = RADIO;
+        holdCounter_ = 0;
+        deviceModeChanged_ = true;
+        //Change mode
+    } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
         //Change mode
         deviceMode_ = CHG;
-        holdCounter = 0;
-    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter > 0 && holdCounter < BTN_SINGLE_PRESS) {
+        holdCounter_ = 0;
+        deviceModeChanged_ = true;
+    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
         //Change mode
         deviceMode_ = CHG;
-        holdCounter = 0;
+        holdCounter_ = 0;
+        deviceModeChanged_ = true;
     } else if (deviceMode_ == CHG && BTN_IN) {
         //Change mode
-        deviceMode_ = MOD_IN_;
-        holdCounter = 0;
+        deviceMode_ = (MOD_IN_ == 0) ? RADIO : A2DP;
+        holdCounter_ = 0;
+        deviceModeChanged_ = true;
     } else if (deviceMode_ != CHG && BTN_IN) {
         holdCounter_++;
     } else if (deviceMode_ == NONE && BTN_IN) {
-        deviceMode_ = MOD_IN_;
-        holdCounter = 0;
-    } else if (deviceMode_ == NONE && CHG_IN) { //MARK: TODO: CHG_IN -> DC_IN
-        deviceMode_ = CHG;  //MARK: DEF: DC_IN
-    } else if (deviceMode_ == CHG && !CHG_IN) { //MARK: TODO: CHG_IN -> DC_IN
+        deviceMode_ = (MOD_IN_ == 0) ? RADIO : A2DP;
+        holdCounter_ = 0;
+        deviceModeChanged_ = true;
+    } else if (deviceMode_ == NONE && DC_IN) {
+        deviceMode_ = CHG;
+        //deviceModeChanged_ = true;
+    } else if (deviceMode_ == CHG && !DC_IN) {
         digitalWrite(PIN_PSU_EN,LOW);
         deviceMode_ = NONE;
+        //deviceModeChanged_ = true;
     } else {
         holdCounter_ = 0;
     }
@@ -239,6 +258,7 @@ void IRAM_ATTR encA_ISR(){ //~7us //MARK: encA_ISR
   }
   if(encA != encB){
     ENC_COUNT+=ENC_VEL;
+    volumeChange_++;
   }
 }
 
@@ -253,8 +273,10 @@ void IRAM_ATTR encB_ISR(){ //~7us //MARK: encB_ISR
   }
   if(encA != encB){
     ENC_COUNT-=ENC_VEL;
+    volumeChange_--;
   }
 }
+
 
 // Forward declaration of the volume change callback in bluetooth sink mode
 void avrc_volume_change_callback(int vol);
@@ -268,12 +290,14 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text);
  */
 void showWelcomeMessage() { //MARK: showWelcomeMessage
     // Show some information on the startup screen
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE,0);
-    display.setCursor(0,25);
-    display.print(deviceName);
-    display.display();
+    if (display_present) {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SH110X_WHITE,0);
+        display.setCursor(0,25);
+        display.print(deviceName);
+        display.display();
+    }
 }
 
 /**
@@ -282,39 +306,46 @@ void showWelcomeMessage() { //MARK: showWelcomeMessage
  * @param volume Volume to be displayed on the TFT screen.
  */
 void showVolume(uint8_t volume) { //MARK: showVolume
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE,0);
-    display.setCursor(0,0);
-    display.print("Volume: ");
-    display.printf("%3d", volume);
-    display.display();
+    if (display_present) {
+        display.setTextSize(1);
+        display.setTextColor(SH110X_WHITE,0);
+        display.setCursor(0,0);
+        display.print("Volume: ");
+        display.printf("%3d", volume);
+        display.display();
+    }
 }
 
 /**
  * Displays the current station name contained in 'stationStr_' on the TFT screen.
  */
 void showStation() { //MARK: showStation
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE,0);
-    display.setCursor(0,10);
-    if (deviceMode_ == RADIO) {
-        display.print("Station: ");
+   if (display_present) {
+         display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SH110X_WHITE,0);
+        display.setCursor(0,10);
+        if (deviceMode_ == RADIO) {
+            display.print("Station: ");
+        }
+        else {
+            display.print("Bluetooth");
+        }
+        display.setCursor(0,20);
+        display.print(stationStr_);
+        if (deviceMode_ == RADIO) {
+            display.setCursor(100,0);
+            display.print("WiFi");
+        }
+        else {
+            display.setCursor(110,0);
+            display.print("BT");
+        }
+        display.display();
+    } else {
+        Serial.print("Station: ");
+        Serial.println(stationStr_);
     }
-    else {
-        display.print("Bluetooth");
-    }
-    display.setCursor(0,20);
-    display.print(stationStr_);
-    if (deviceMode_ == RADIO) {
-        display.setCursor(100,0);
-        display.print("WiFi");
-    }
-    else {
-        display.setCursor(110,0);
-        display.print("BT");
-    }
-    display.display();
 }
 
 /**
@@ -323,7 +354,8 @@ void showStation() { //MARK: showStation
  */
 void showSongInfo() { //MARK: showSongInfo
     // Update the song title if flag is raised
-    if (infoUpdatedFlag_) {
+    if (display_present) {
+        if (infoUpdatedFlag_) {
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(SH110X_WHITE,0);
@@ -350,6 +382,7 @@ void showSongInfo() { //MARK: showSongInfo
         display.display();
         showVolume(volumeCurrent_);
     }
+    }
     // else {
     //     //Scroll the song title from right to left
     //     titlePosX_ -= 6; // Move the sprite to the left by 6 pixels
@@ -367,16 +400,18 @@ void showSongInfo() { //MARK: showSongInfo
 
 
 void showPlayState(bool isConnected) { //MARK: showPlayState
-    display.setTextSize(1);
-    display.setCursor(80,0);
-    display.print("C:");
-    if (isConnected) {
-        display.print("Y");
+    if (display_present) {
+        display.setTextSize(1);
+        display.setCursor(80,0);
+        display.print("C:");
+        if (isConnected) {
+            display.print("Y");
+        }
+        else {
+            display.print("N");
+        }
+        display.display();
     }
-    else {
-        display.print("N");
-    }
-    display.display();
 }
 
 /**
@@ -386,22 +421,25 @@ void showPlayState(bool isConnected) { //MARK: showPlayState
 void startRadio() { //MARK: startRadio()
     //Serial.print("Begin: free heap = %d, max alloc heap = %d", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     if (pAudio_ == nullptr) {
-        display.clearDisplay();
-        display.setCursor(0,0);
-        display.print("MAC:"); // Own network mac address
-        display.setCursor(0,10);
-        display.print(WiFi.macAddress().c_str());
+        if (display_present) {
+            display.clearDisplay();
+            display.setCursor(0,0);
+            display.print("MAC:"); // Own network mac address
+            display.setCursor(0,10);
+            display.print(WiFi.macAddress().c_str());
+            display.setCursor(0,30);
+            display.println(" Connecting to WiFi...");
+            display.setCursor(0,40);
+            display.printf(" SSID: "); // WiFi network name
+            display.setCursor(0,50);
+            display.print(WifiCredentials::SSID);
+            display.display();
+        }
         Serial.println("MAC: ");
         Serial.print(WiFi.macAddress().c_str());
-        display.setCursor(0,30);
-        display.println(" Connecting to WiFi...");
-        display.setCursor(0,40);
-        display.printf(" SSID: "); // WiFi network name
-        display.setCursor(0,50);
-        display.print(WifiCredentials::SSID);
         Serial.println("Connecting to:");
         Serial.println(WifiCredentials::SSID);
-        display.display();
+        
 
         // Initialize WiFi and connect to network
         WiFi.mode(WIFI_STA);
@@ -411,39 +449,45 @@ void startRadio() { //MARK: startRadio()
         while (!WiFi.isConnected()) {
             readEncState();
             //MARK: CHANGE HERE
-            if (buttonState_1) {
-                if (deviceMode_ == RADIO) {
-                    EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
-                    EEPROM.commit();
-                    Serial.println("Switching to BT!");
-                    stopRadio(); // Close connections and clean up
-                }
-                else {
-                    EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
-                    EEPROM.commit();
-                    Serial.println("Switching to Radio!");
-                }
-                ESP.restart();
-            }
+            // if (buttonState_1) {
+            //     if (deviceMode_ == RADIO) {
+            //         EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
+            //         EEPROM.commit();
+            //         Serial.println("Switching to BT!");
+            //         stopRadio(); // Close connections and clean up
+            //     }
+            //     else {
+            //         EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
+            //         EEPROM.commit();
+            //         Serial.println("Switching to Radio!");
+            //     }
+            //     ESP.restart();
+            // }
             delay(100);
             Serial.print("...");
         }
 
         // Display own IP address after connecting
-        display.clearDisplay();
-        display.setCursor(0,10);
-        display.println(" Connected to WiFi");
-        display.setCursor(0,20);
-        display.printf(" IP: %s", WiFi.localIP().toString().c_str());
+        if (display_present) {
+            display.clearDisplay();
+            display.setCursor(0,0);
+            display.print("MAC:"); // Own network mac address
+            display.setCursor(0,10);
+            display.print(WiFi.macAddress().c_str());
+            display.setCursor(0,30);
+            display.print("IP:"); // Own IP address
+            display.setCursor(0,40);
+            display.print(WiFi.localIP().toString().c_str());
+            display.display();
+        }
         Serial.print("\nIP:");
         Serial.print(WiFi.localIP().toString().c_str());
-        display.display();
+
         pAudio_ = new Audio(false); // Use external DAC
 
         // Setup audio
         pAudio_->setVolume(0); // 0...21
         pAudio_->setPinout(I2S_BCK_PIN, I2S_WS_PIN, I2S_DOUT_PIN);
-
         deviceMode_ = RADIO;
 
         // Start the audio processing task
@@ -451,8 +495,9 @@ void startRadio() { //MARK: startRadio()
 
         // Wait some time before wiping out the startup screen
         vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-        display.clearDisplay();
+        if (display_present) {
+            display.clearDisplay();
+        }
     }
     else {
         log_w("'pAudio_' not cleaned up!");
@@ -501,8 +546,10 @@ void stopRadio() { //MARK: stopRadio()
         volumeCurrent_ = 0;
         volumeCurrentF_ = 0.0f;
         volumeCurrentChangedFlag_ = true;
-
-        display.clearDisplay();
+        if (display_present) {
+          display.clearDisplay();
+        }
+        
     }
     else {
         log_w("Cannot clean up 'pAudio_'!");
@@ -533,8 +580,10 @@ void startA2dp() { //MARK: startA2dp
     // a2dp_.set_avrc_rn_playstatus_callback(avrc_playstatus_callback);
 
     showWelcomeMessage();
-    display.setCursor(0,10);
-    display.print(" Starting bluetooth");
+    if (display_present) {
+        display.setCursor(0,10);
+        display.print(" Starting bluetooth");
+    }
     a2dp_.set_auto_reconnect(true, 1000); //Remove this line if you don't want to auto reconnect
     a2dp_.start(deviceName);
     deviceMode_ = A2DP;
@@ -542,19 +591,25 @@ void startA2dp() { //MARK: startA2dp
     esp_bt_controller_status_t btStatus = esp_bt_controller_get_status();
 
     if (btStatus == ESP_BT_CONTROLLER_STATUS_ENABLED) {
-        display.clearDisplay();
-        display.setCursor(0,10);
-        display.print(" Bluetooth enabled");
-        display.display();
+        if (display_present) {
+            display.clearDisplay();
+            display.setCursor(0,10);
+            display.print(" Bluetooth enabled");
+            display.display();
+        }
+        Serial.println("Bluetooth enabled");
     }
     else {
-        display.clearDisplay();
-        display.setCursor(0,20);
-        display.print(" Bluetooth not enabled");
-        display.setCursor(0,30);
-        display.print(" Status: ");
-        display.println(btStatus);
-        display.display();
+        if (display_present) {
+            display.clearDisplay();
+            display.setCursor(0,20);
+            display.print(" Bluetooth not enabled");
+            display.setCursor(0,30);
+            display.print(" Status: ");
+            display.println(btStatus);
+            display.display();
+        }
+        Serial.print("Bluetooth not enabled: ");
     }
 
     stationStr_ = "Bluetooth";
@@ -660,7 +715,31 @@ void audioProcessing(void *p) { //MARK: audioProcessing
 }
 
 void readEncState() { //MARK: readEncState
-
+    
+ if (volumeChange_ != 0) {
+               
+                if (deviceMode_ == A2DP){
+                    
+                    volumeCurrent_ += volumeChange_;
+                    if (volumeCurrent_ < 0) {
+                        volumeCurrent_ = 0;
+                    } else if (volumeCurrent_ > 127) {
+                        volumeCurrent_ = 127;
+                    }
+                    a2dp_.set_volume(volumeCurrent_);
+                    showVolume(volumeCurrent_);
+                } else if (deviceMode_ == RADIO) {
+                    volumeCurrent_ += volumeChange_;
+                    if (volumeCurrent_ < 0) {
+                        volumeCurrent_ = 0;
+                    } else if (volumeCurrent_ > volumeMax) {
+                        volumeCurrent_ = volumeMax;
+                    }
+                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                }   
+            
+    }
+    volumeChange_ = 0;
 }
 
 void setup() { //MARK: Setup
@@ -671,7 +750,7 @@ void setup() { //MARK: Setup
     pinMode(PIN_BTN,INPUT);
     chgMode = true;
     
-
+    pinMode(PD_MUTE,OUTPUT);
     /*Blink setup*/
     pinMode(PIN_LED, OUTPUT);
     Timer0.attachInterruptInterval(TIMER_0_INTERVAL, Timer0_ISR);
@@ -680,7 +759,7 @@ void setup() { //MARK: Setup
     pinMode(PIN_ENC_A,INPUT);
     pinMode(PIN_ENC_B,INPUT);
     attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encA_ISR, RISING);
-
+    
     delay(1);
     
     /*
@@ -702,42 +781,56 @@ void setup() { //MARK: Setup
 
     if(!display.begin(0x3C,true)) { // Address 0x3C for 128x32
         Serial.println(F("Adafruit SH1106G allocation failed"));
-        for(;;); // Don't proceed, loop forever
+        display_present = false;
+    } else {
+        display_present = true;
     }
 
     if ( EEPROM.begin(1) ) {
         //uint8_t mode = EEPROM.readByte(0);
         MOD_IN_ = EEPROM.readByte(0);
+        Serial.print("EEPROM.readByte(0) = ");
+        Serial.println(MOD_IN_);
+        Serial.println(EEPROM.readByte(0));
         //Serial.print("EEPROM.readByte(0) = %d", mode);
         Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
         //MARK: TIMER3
+        deviceMode_ = MOD_IN_ ? A2DP : RADIO;
+        // enum DeviceMode {RADIO = 0, A2DP = 1, CHG = 2, NONE = 3};
+        digitalWrite(PD_MUTE,HIGH); //MARK: UNMUTE
         while (deviceMode_ == NONE) {
             delay(1);
         }
-        if (deviceMode_ == 2) {
-            display.clearDisplay();
-            display.setTextSize(1);
-            display.setTextColor(SH110X_WHITE,0);
-            display.setCursor(0,25);
-            display.print("I2S BT");
-            display.display();
+        if (deviceMode_ == 1) {
+            if (display_present) {
+                display.clearDisplay();
+                display.setTextSize(1);
+                display.setTextColor(SH110X_WHITE,0);
+                display.setCursor(0,25);
+                display.print("I2S BT");
+                display.display();
+            }
             startA2dp();
         }
-        else if (deviceMode_ == 1) {
-            display.clearDisplay();
-            display.setTextSize(1);
-            display.setTextColor(SH110X_WHITE,0);
-            display.setCursor(0,25);
-            display.print("I2S URL");
-            display.display();
+        else if (deviceMode_ == 0) {
+            if (display_present) {
+                display.clearDisplay();
+                display.setTextSize(1);
+                display.setTextColor(SH110X_WHITE,0);
+                display.setCursor(0,25);
+                display.print("I2S URL");
+                display.display();
+            }
             startRadio();
-        } else if (deviceMode_ == 3) {
-            display.clearDisplay();
-            display.setTextSize(1);
-            display.setTextColor(SH110X_WHITE,0);
-            display.setCursor(0,25);
-            display.print("I2S CHG");
-            display.display();
+        } else if (deviceMode_ == 2) {
+            if (display_present) {
+                display.clearDisplay();
+                display.setTextSize(1);
+                display.setTextColor(SH110X_WHITE,0);
+                display.setCursor(0,25);
+                display.print("I2S CHG");
+                display.display();
+            }
         }   
     }
     else {
@@ -750,7 +843,7 @@ void setup() { //MARK: Setup
 
 /* Handle volume control and other commands via serial interface - only for debugging 
 */
-void handleVolumeControl() { //MARK: handleVolumeControl
+void handleSerialCommands() { //MARK: handleSerialCommands
     if (Serial.available()) {
         char input = Serial.read();
         if (input == '+') { //MARK: Volume Up
@@ -828,6 +921,7 @@ void handleVolumeControl() { //MARK: handleVolumeControl
         } else if (input == 'w') { //MARK: WiFi
             // Switch to WiFi mode
             if (deviceMode_ == A2DP) {
+                deviceMode_ = RADIO;
                 EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
                 EEPROM.commit();
                 Serial.println("Switching to Radio!");
@@ -836,6 +930,7 @@ void handleVolumeControl() { //MARK: handleVolumeControl
         } else if (input == 'c') { //MARK: Bluetooth
             // Switch to Bluetooth mode
             if (deviceMode_ == RADIO) {
+                deviceMode_ = A2DP;
                 EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
                 EEPROM.commit();
                 Serial.println("Switching to BT!");
@@ -847,49 +942,65 @@ void handleVolumeControl() { //MARK: handleVolumeControl
 
 void loop() { //MARK: loop
     
-    handleVolumeControl();
-        
-
+    handleSerialCommands();
     readEncState();
 
-    if (buttonState_1) {
+    if (deviceModeChanged_) {
         if (deviceMode_ == RADIO) {
             EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
             EEPROM.commit();
             Serial.println("Switching to BT!");
             stopRadio(); // Close connections and clean up
+            ESP.restart();
         }
-        else {
+        else if (deviceMode_ == A2DP) {
             EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
             EEPROM.commit();
             Serial.println("Switching to Radio!");
+            ESP.restart();
+        } else {
+            Serial.println("Switching to CHG!");
         }
-        ESP.restart();
     }
+
+    // if (buttonState_1) {
+    //     if (deviceMode_ == RADIO) {
+    //         EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
+    //         EEPROM.commit();
+    //         Serial.println("Switching to BT!");
+    //         stopRadio(); // Close connections and clean up
+    //     }
+    //     else {
+    //         EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
+    //         EEPROM.commit();
+    //         Serial.println("Switching to Radio!");
+    //     }
+    //     ESP.restart();
+    // }
 
     if (deviceMode_ == RADIO) {
 
         // Button A: Switch to next station
-        if (buttonState_2) {
+        // if (buttonState_2) {
             
-            // Turn down volume
-            volumeCurrent_ = 0;
-            volumeCurrentF_ = 0.0f;
-            volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+        //     // Turn down volume
+        //     volumeCurrent_ = 0;
+        //     volumeCurrentF_ = 0.0f;
+        //     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
 
-            // Advance station index to next station
-            stationIndex_ = (stationIndex_ + 1) % numStations;
-            stationChanged_ = true; // Raise flag for the audio task
+        //     // Advance station index to next station
+        //     stationIndex_ = (stationIndex_ + 1) % numStations;
+        //     stationChanged_ = true; // Raise flag for the audio task
 
-            // Erase station name
-            stationStr_ = "";
-            stationUpdatedFlag_ = true; // Raise flag for display update routine
+        //     // Erase station name
+        //     stationStr_ = "";
+        //     stationUpdatedFlag_ = true; // Raise flag for display update routine
 
-            // Erase stream info
-            infoStr_ = "";
-            infoUpdatedFlag_ = true; // Raise flag for display update routine
-        }
-        else {
+        //     // Erase stream info
+        //     infoStr_ = "";
+        //     infoUpdatedFlag_ = true; // Raise flag for display update routine
+        // }
+        // else {
             // Increase volume gradually after station change
             if (!stationChangedMute_ && volumeCurrent_ < volumeNormal_) {
                 volumeCurrentF_ += 0.25;
@@ -898,7 +1009,7 @@ void loop() { //MARK: loop
 
                 showVolume(volumeCurrent_);
             }
-        }
+        // }
 
         if (connectionError_) {
             display.setCursor(0,30);
