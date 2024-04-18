@@ -1,4 +1,4 @@
-#include <M5StickCPlus.h>
+//#include <M5StickCPlus.h>
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <Adafruit_SH110X.h>
@@ -51,7 +51,7 @@
 #define BTN_SINGLE_PRESS 20
 // #define BTN_LONG_PRESS 25 
 
-ESP32Timer Timer0(0); //4 timers are available (from 0 to 3)
+// ESP32Timer Timer0(0); //4 timers are available (from 0 to 3)
 ESP32Timer Timer3(3);
 
 struct Metadata {
@@ -62,7 +62,7 @@ struct Metadata {
 
 const char* deviceName = "BT-WiFi-I2S-OLED";
 
-const uint8_t volumeMax = 21;
+const uint8_t volumeMax = 127;
 
 static volatile char ENC_COUNT = 0;
 static volatile long tick = 0; //Seconds from power on
@@ -72,7 +72,7 @@ static volatile bool ampMode = false;
 static volatile bool chgMode = false;
 
 // /*Interrupt Handlers*/
-bool IRAM_ATTR Timer0_ISR(void * timerNo);
+// bool IRAM_ATTR Timer0_ISR(void * timerNo);
 bool IRAM_ATTR Timer3_ISR(void * timerNo);
 void IRAM_ATTR encA_ISR();
 void IRAM_ATTR encB_ISR();
@@ -184,19 +184,19 @@ int16_t titleTextWidth_ = 0;
 uint16_t holdCounter_ = 0;
 int8_t volumeChange_ = 0;
 
-bool DC_IN = true; //MARK: DC_IN PLACEHOLDER!
+bool CHG_IN = true; //MARK: CHG_IN PLACEHOLDER!
 
 bool display_present = false; //MARK: display_present
 
-bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
-  /*Blink */
-  static bool ledToggle = 0;
-  digitalWrite(PIN_LED,ledToggle);
-  ledToggle=!ledToggle;
-  /*Tick*/
-  tick++;
-  return true;
-}
+// bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
+//   /*Blink */
+//   static bool ledToggle = 0;
+//   digitalWrite(PIN_LED,ledToggle);
+//   ledToggle=!ledToggle;
+//   /*Tick*/
+//   tick++;
+//   return true;
+// }
 
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
@@ -233,13 +233,13 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
         deviceMode_ = (MOD_IN_ == 0) ? RADIO : A2DP;
         holdCounter_ = 0;
         deviceModeChanged_ = true;
-    } else if (deviceMode_ == NONE && DC_IN) {
+    } else if (deviceMode_ == NONE && CHG_IN) {
         deviceMode_ = CHG;
-        //deviceModeChanged_ = true;
-    } else if (deviceMode_ == CHG && !DC_IN) {
+        deviceModeChanged_ = true;
+    } else if (deviceMode_ == CHG && !CHG_IN) {
         digitalWrite(PIN_PSU_EN,LOW);
         deviceMode_ = NONE;
-        //deviceModeChanged_ = true;
+        deviceModeChanged_ = true;
     } else {
         holdCounter_ = 0;
     }
@@ -486,8 +486,10 @@ void startRadio() { //MARK: startRadio()
         pAudio_ = new Audio(false); // Use external DAC
 
         // Setup audio
-        pAudio_->setVolume(0); // 0...21
+        pAudio_->setVolume(0); // 0...volumeMax
+        pAudio_->setVolumeSteps(volumeMax);
         pAudio_->setPinout(I2S_BCK_PIN, I2S_WS_PIN, I2S_DOUT_PIN);
+        digitalWrite(PIN_AMP_EN, HIGH);
         deviceMode_ = RADIO;
 
         // Start the audio processing task
@@ -568,7 +570,7 @@ void startA2dp() { //MARK: startA2dp
         .bck_io_num = I2S_BCK_PIN,
         .ws_io_num = I2S_WS_PIN,
         .data_out_num = I2S_DOUT_PIN,
-        .data_in_num = I2S_PIN_NO_CHANGE
+        .data_in_num = NULL
     };
 
     a2dp_.set_pin_config(pinConfig);
@@ -586,6 +588,10 @@ void startA2dp() { //MARK: startA2dp
     }
     a2dp_.set_auto_reconnect(true, 1000); //Remove this line if you don't want to auto reconnect
     a2dp_.start(deviceName);
+    //MARK: ADDED FOR TEST:
+    //digitalWrite(PIN_PSU_EN,HIGH);
+    //Timer0.attachInterruptInterval(TIMER_0_INTERVAL, Timer0_ISR);
+    digitalWrite(PIN_AMP_EN,HIGH);
     deviceMode_ = A2DP;
     
     esp_bt_controller_status_t btStatus = esp_bt_controller_get_status();
@@ -648,7 +654,9 @@ void setAudioShutdown(bool b) { //MARK: setAudioShutdown
 }
 
 void audioProcessing(void *p) { //MARK: audioProcessing
+    
     while (true) {
+        digitalWrite(PIN_LED_R, LOW);
         if (deviceMode_ != RADIO) {
             vTaskDelay(200 / portTICK_PERIOD_MS);
             continue;
@@ -709,9 +717,11 @@ void audioProcessing(void *p) { //MARK: audioProcessing
         pAudio_->loop();
 
         audioBufferFilled_ = pAudio_->inBufferFilled(); // Update used buffer capacity
-        
+        digitalWrite(PIN_LED_R, HIGH);
         vTaskDelay(1 / portTICK_PERIOD_MS); // Let other tasks execute
+
     }
+    
 }
 
 void readEncState() { //MARK: readEncState
@@ -753,7 +763,7 @@ void setup() { //MARK: Setup
     pinMode(PD_MUTE,OUTPUT);
     /*Blink setup*/
     pinMode(PIN_LED, OUTPUT);
-    Timer0.attachInterruptInterval(TIMER_0_INTERVAL, Timer0_ISR);
+    // Timer0.attachInterruptInterval(TIMER_0_INTERVAL, Timer0_ISR);
 
     /*Encoder Interrupt setup*/
     pinMode(PIN_ENC_A,INPUT);
@@ -761,7 +771,12 @@ void setup() { //MARK: Setup
     attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encA_ISR, RISING);
     
     delay(1);
-    
+    pinMode(PIN_AMP_EN, OUTPUT);
+    digitalWrite(PIN_AMP_EN,LOW);
+
+    pinMode(PIN_LED_R, OUTPUT);
+    digitalWrite(PIN_AMP_EN,LOW);
+
     /*
     // Setup GPIO ports for SPK hat
     gpio_set_direction(GPIO_NUM_0, GPIO_MODE_OUTPUT); // Shutdown circuit of M5Stack SPK hat
@@ -801,7 +816,7 @@ void setup() { //MARK: Setup
         while (deviceMode_ == NONE) {
             delay(1);
         }
-        if (deviceMode_ == 1) {
+        if (deviceMode_ == A2DP) {
             if (display_present) {
                 display.clearDisplay();
                 display.setTextSize(1);
@@ -811,8 +826,9 @@ void setup() { //MARK: Setup
                 display.display();
             }
             startA2dp();
+            digitalWrite(PIN_PSU_EN,HIGH);
         }
-        else if (deviceMode_ == 0) {
+        else if (deviceMode_ == RADIO) {
             if (display_present) {
                 display.clearDisplay();
                 display.setTextSize(1);
@@ -822,7 +838,7 @@ void setup() { //MARK: Setup
                 display.display();
             }
             startRadio();
-        } else if (deviceMode_ == 2) {
+        } else if (deviceMode_ == CHG) {
             if (display_present) {
                 display.clearDisplay();
                 display.setTextSize(1);
@@ -831,12 +847,19 @@ void setup() { //MARK: Setup
                 display.print("I2S CHG");
                 display.display();
             }
-        }   
-    }
-    else {
+        } else if (deviceMode_ == NONE) {
+            if (display_present) {
+                display.clearDisplay();
+                display.setTextSize(1);
+                display.setTextColor(SH110X_WHITE,0);
+                display.setCursor(0,25);
+                display.print("I2S STANDBY");
+                display.display();
+            }
+        }
+    } else {
         //log_w("EEPROM.begin() returned 'false'!");
         Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
-        startRadio();
     }
 }
 
@@ -942,8 +965,6 @@ void handleSerialCommands() { //MARK: handleSerialCommands
 
 void loop() { //MARK: loop
     
-    handleSerialCommands();
-    readEncState();
 
     if (deviceModeChanged_) {
         if (deviceMode_ == RADIO) {
@@ -958,96 +979,105 @@ void loop() { //MARK: loop
             EEPROM.commit();
             Serial.println("Switching to Radio!");
             ESP.restart();
-        } else {
+        } else if (deviceMode_ == CHG) {
             Serial.println("Switching to CHG!");
+        } else if (deviceMode_ == NONE) {
+            Serial.println("Switching to NONE!");
         }
-    }
+        deviceModeChanged_ = false;
+    } else {
+      
+      handleSerialCommands();
+      readEncState();
+      // if (buttonState_1) {
+      //     if (deviceMode_ == RADIO) {
+      //         EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
+      //         EEPROM.commit();
+      //         Serial.println("Switching to BT!");
+      //         stopRadio(); // Close connections and clean up
+      //     }
+      //     else {
+      //         EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
+      //         EEPROM.commit();
+      //         Serial.println("Switching to Radio!");
+      //     }
+      //     ESP.restart();
+      // }
 
-    // if (buttonState_1) {
-    //     if (deviceMode_ == RADIO) {
-    //         EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
-    //         EEPROM.commit();
-    //         Serial.println("Switching to BT!");
-    //         stopRadio(); // Close connections and clean up
-    //     }
-    //     else {
-    //         EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
-    //         EEPROM.commit();
-    //         Serial.println("Switching to Radio!");
-    //     }
-    //     ESP.restart();
-    // }
+      if (deviceMode_ == RADIO) {
 
-    if (deviceMode_ == RADIO) {
+          // Button A: Switch to next station
+          // if (buttonState_2) {
+              
+          //     // Turn down volume
+          //     volumeCurrent_ = 0;
+          //     volumeCurrentF_ = 0.0f;
+          //     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
 
-        // Button A: Switch to next station
-        // if (buttonState_2) {
-            
-        //     // Turn down volume
-        //     volumeCurrent_ = 0;
-        //     volumeCurrentF_ = 0.0f;
-        //     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+          //     // Advance station index to next station
+          //     stationIndex_ = (stationIndex_ + 1) % numStations;
+          //     stationChanged_ = true; // Raise flag for the audio task
 
-        //     // Advance station index to next station
-        //     stationIndex_ = (stationIndex_ + 1) % numStations;
-        //     stationChanged_ = true; // Raise flag for the audio task
+          //     // Erase station name
+          //     stationStr_ = "";
+          //     stationUpdatedFlag_ = true; // Raise flag for display update routine
 
-        //     // Erase station name
-        //     stationStr_ = "";
-        //     stationUpdatedFlag_ = true; // Raise flag for display update routine
+          //     // Erase stream info
+          //     infoStr_ = "";
+          //     infoUpdatedFlag_ = true; // Raise flag for display update routine
+          // }
+          // else {
+              // Increase volume gradually after station change
+              // if (!stationChangedMute_ && volumeCurrent_ < volumeNormal_) {
+              //     volumeCurrentF_ += 0.25;
+              //     volumeCurrent_ = (uint8_t) volumeCurrentF_;
+              //     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
 
-        //     // Erase stream info
-        //     infoStr_ = "";
-        //     infoUpdatedFlag_ = true; // Raise flag for display update routine
-        // }
-        // else {
-            // Increase volume gradually after station change
-            if (!stationChangedMute_ && volumeCurrent_ < volumeNormal_) {
-                volumeCurrentF_ += 0.25;
-                volumeCurrent_ = (uint8_t) volumeCurrentF_;
-                volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+              //     showVolume(volumeCurrent_);
+              // }
+          // }
+          if (volumeCurrentChangedFlag_) {
+            showVolume(volumeCurrent_);
+          }
+          if (connectionError_) {
+              display.setCursor(0,30);
+              display.println("Stream unavailable");
+              digitalWrite(PIN_AMP_EN,LOW); //MARK: DISABLE AMP NO STREAM
+              vTaskDelay(200 / portTICK_PERIOD_MS); // Wait until next cycle
+          }
+          else {
+              // Update the station name if flag is raised
+              if (stationUpdatedFlag_) {
+                  showStation();
+                  stationUpdatedFlag_ = false; // Clear update flag  
+                  digitalWrite(PIN_AMP_EN,HIGH); //MARK: ENABLE AMP NEW STATION
+              }
+              showSongInfo();
+              vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
+          }
+      } else if (deviceMode_ == A2DP) {
+              // Update the station name if flag is raised
+              if (stationUpdatedFlag_) {
+                  showStation();
+                  stationUpdatedFlag_ = false; // Clear update flag
+              }
 
-                showVolume(volumeCurrent_);
-            }
-        // }
+              showSongInfo();
 
-        if (connectionError_) {
-            display.setCursor(0,30);
-            display.println("Stream unavailable");
-            vTaskDelay(200 / portTICK_PERIOD_MS); // Wait until next cycle
-        }
-        else {
-            // Update the station name if flag is raised
-            if (stationUpdatedFlag_) {
-                showStation();
-                stationUpdatedFlag_ = false; // Clear update flag
-            }
-
-            showSongInfo();
-            vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
-        }
-    }
-    else {
-        if (deviceMode_ == A2DP) {
-            // Update the station name if flag is raised
-            if (stationUpdatedFlag_) {
-                showStation();
-                stationUpdatedFlag_ = false; // Clear update flag
-            }
-
-            showSongInfo();
-
-            if (volumeCurrentChangedFlag_) {
-                showVolume(volumeCurrent_);
-            } 
-            
-            showPlayState(a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED);
-            vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
-        }
-        else {
-            // Neither radio mode nor A2DP mode
-            vTaskDelay(200 / portTICK_PERIOD_MS);
-        }
+              if (volumeCurrentChangedFlag_) {
+                  showVolume(volumeCurrent_);
+              } 
+              
+              showPlayState(a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED);
+              vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
+      } else if (deviceMode_ == CHG) {
+          vTaskDelay(200 / portTICK_PERIOD_MS);
+          Serial.println("CHG MODE");
+      } else if (deviceMode_ == NONE) {
+        // Neither radio, A2DP or CHG
+        vTaskDelay(200 / portTICK_PERIOD_MS);
+      }
+      
     }
 }
 
