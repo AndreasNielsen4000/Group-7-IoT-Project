@@ -9,7 +9,8 @@
 #include <EEPROM.h>
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
-//#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
+#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
+#include <Arduino_JSON.h>
 
 #define I2S_BCK_PIN 13
 #define I2S_WS_PIN 26
@@ -62,6 +63,8 @@ struct Metadata {
 
 const char* deviceName = "BT-WiFi-I2S-OLED";
 
+const char* apiUrl = "https://internetradioapi.azurewebsites.net/radio/play";
+
 const uint8_t volumeMax = 21;
 
 static volatile char ENC_COUNT = 0;
@@ -85,7 +88,6 @@ void IRAM_ATTR encB_ISR();
 
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-
 //TEST STATIONS:
 /** Web radio stream URLs */
 const String stationURLs[] = { //MARK: stationURLs
@@ -96,6 +98,17 @@ const String stationURLs[] = { //MARK: stationURLs
     "http://play.antenne.de/antenne.m3u",
     "http://funkhaus-ingolstadt.stream24.net/radio-in.mp3"
 };
+
+//Variables for website/app
+const String RadioURL = "";
+
+const String RadioURLPrev = "";
+
+const String RadioName = "";
+
+const String RadioPlaying = "";
+
+const String RadioVolume = "";
 
 /** Number of stations */
 const uint8_t numStations = sizeof(stationURLs) / sizeof(stationURLs[0]);
@@ -195,6 +208,13 @@ bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
   ledToggle=!ledToggle;
   /*Tick*/
   tick++;
+  // Check backend for new data
+  if (deviceMode_ == RADIO) {
+    getRadioServerData(apiUrl);
+    if (checkUrlState()) {
+        stationChanged_ = true;
+    }
+  }
   return true;
 }
 
@@ -285,6 +305,11 @@ void avrc_volume_change_callback(int vol);
 void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*);
 
 void avrc_metadata_callback(uint8_t id, const uint8_t *text);
+
+void httpGETRequest(const char* apiUrl);
+
+void getRadioServerData(const char* apiUrl)
+
 /**
  * Shows a welcome message at startup of the device on the TFT display.
  */
@@ -660,14 +685,15 @@ void audioProcessing(void *p) { //MARK: audioProcessing
             volumeCurrentChangedFlag_ = false; // Clear flag
         }
         
-        // Proces requested station change
+        // Process requested station change
         if (stationChanged_) {
             pAudio_->stopSong();
             setAudioShutdown(true); // Turn off amplifier
             stationChangedMute_ = true; // Mute audio until stream becomes stable
 
             // Establish HTTP connection to requested stream URL
-            const char *streamUrl = stationURLs[stationIndex_].c_str();
+            //const char *streamUrl = stationURLs[stationIndex_].c_str();
+            const char *streamUrl = RadioURLPrev.c_str();
 
             bool success = pAudio_->connecttohost( streamUrl );
 
@@ -1143,4 +1169,49 @@ void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) { //
 void avrc_volume_change_callback(int vol) { //MARK: avrc_volume_change_callback
     volumeCurrent_ = vol;
     volumeCurrentChangedFlag_ = true;
+}
+
+String httpGETRequest(const char* apiUrl) { //MARK: httpGETRequest
+    HTTPClient http;
+    String payload = "";
+    // Establishing connection the the server
+    http.begin(apiUrl.c_str()); 
+    http.addHeader("Content-Type", "application/json");
+    int httpCode = https.GET();
+    if (httpCode <= 0)
+    {
+        Serial.println("Error on HTTP request");
+        Serial.println(httpCode);
+        return payload;
+    }
+    payload = http.getString();
+    Serial.println(payload);
+    http.end();
+    return payload;
+}
+
+void getRadioServerData(const char* apiUrl) {
+    String getRadioInfo = httpGETRequest(apiUrl);
+    // Parse the JSON data
+    JSONVar RadioData = JSON.parse(getRadioInfo);
+    if (JSON.typeof(RadioData) == "undefined") {
+        Serial.println("Parsing input failed!");
+        return;
+    }
+    //Extracting data from JSON like URL, Name, etc.
+    RadioURL = RadioData[0]["url"];
+    RadioName = RadioData[0]["name"];
+    RadioPlaying = RadioData[0]["isPlaying"];
+    RadioVolume = RadioData[0]["volume"];
+}
+
+bool checkUrlState() {
+    /*
+    Check if the URL has changed since last reading, if yes return true else false
+    */
+    if (RadioURL != RadioURLPrev) {
+        RadioURLPrev = RadioURL;
+        return true;
+    }
+    return false;
 }
