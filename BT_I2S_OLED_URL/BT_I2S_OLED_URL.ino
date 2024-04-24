@@ -1,10 +1,9 @@
-#include <M5StickCPlus.h>
+//#include <M5StickCPlus.h>
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <Adafruit_SH110X.h>
 #include <Adafruit_GFX.h>
 #include "WifiCredentials.h"
-//#include <WiFi.h> 
 #include "Audio.h"
 #include <EEPROM.h>
 #define _TIMERINTERRUPT_LOGLEVEL_     3
@@ -1089,21 +1088,29 @@ void loop() { //MARK: loop
         if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
             previousMillisCHG = currentMillisCHG;
 
-            if (chargeLevel < 30) {
+            if (chargeLevel < 20) {
                 digitalWrite(PIN_LED_R, !digitalRead(PIN_LED_R)); // Toggle red LED
                 digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
                 digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
-            } else if (chargeLevel >= 30 && chargeLevel <= 70) {
+            } else if (chargeLevel >= 20 && chargeLevel < 40) {
+                digitalWrite(PIN_LED_R, !digitalRead(PIN_LED_R)); // Toggle red LED
+                digitalWrite(PIN_LED_G, !digitalRead(PIN_LED_G)); // Toggle green LED
+                digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
+            } else if (chargeLevel >= 40 && chargeLevel <= 60) {
                 digitalWrite(PIN_LED_B, !digitalRead(PIN_LED_B)); // Toggle blue LED
                 digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
                 digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
-            } else if (chargeLevel > 70) {
+            } else if (chargeLevel > 60 && chargeLevel <= 80) {
+                digitalWrite(PIN_LED_B, !digitalRead(PIN_LED_B)); // Toggle blue LED
+                digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
+                digitalWrite(PIN_LED_G, !digitalRead(PIN_LED_G));  // Make sure green LED is off
+            } else if (chargeLevel > 80) {
                 digitalWrite(PIN_LED_G, !digitalRead(PIN_LED_G)); // Toggle green LED
                 digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
                 digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
             }
 
-            chargeLevel += 10;
+            chargeLevel += 1;
             if (chargeLevel > 100) {
                 chargeLevel = 0;
             }
