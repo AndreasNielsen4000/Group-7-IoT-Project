@@ -8,7 +8,7 @@
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
 #include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
-#include <ArduinoJson.h>
+#include <Arduino_Json.h>
 
 #define I2S_BCK_PIN 13
 #define I2S_WS_PIN 26
@@ -215,6 +215,12 @@ int chargeLevel = 0; //MARK: TEMP chargeLevel!
 
 unsigned long previousMillisCHG = 0;
 const long intervalCHG = 1000;
+
+unsigned long lastTime = 0;
+// Timer set to 10 minutes (600000)
+//unsigned long timerDelay = 600000;
+// Set timer to 5 seconds (5000)
+unsigned long timerDelay = 5000;
 
 String httpGETRequest(const char* apiUrl);
 
