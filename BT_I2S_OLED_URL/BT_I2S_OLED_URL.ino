@@ -8,7 +8,7 @@
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
 #include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
-#include <Arduino_Json.h>
+#include <Arduino_JSON.h>
 
 #define I2S_BCK_PIN 13
 #define I2S_WS_PIN 26
