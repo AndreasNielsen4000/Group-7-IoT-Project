@@ -123,7 +123,7 @@ t_DeviceMode deviceMode_ = NONE;
 bool deviceModeChanged_ = false;
 
 // MOD_IN true if bluetooth mode
-static volatile int8_t MOD_IN_ = false;
+static volatile int8_t MOD_IN_ = 0x01; //start in WiFi mode after programming
 
 // Content in audio buffer (provided by esp32-audioI2S library)
 uint32_t audioBufferFilled_ = 0;
@@ -203,40 +203,51 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     bool BTN_IN = analogRead(PIN_BTN) >= SW_THRESHOLD;
     if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
         deviceMode_ = A2DP;
+        MOD_IN_ = (A2DP & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
         holdCounter_ = 0;
         deviceModeChanged_ = true;
         //Change mode
     } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
         deviceMode_ = RADIO;
+        MOD_IN_ = (RADIO & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
         holdCounter_ = 0;
         deviceModeChanged_ = true;
         //Change mode
     } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
-        //Change mode
+        //Save current mode in the third bit of MOD_IN_
+        MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
         deviceMode_ = CHG;
         holdCounter_ = 0;
         deviceModeChanged_ = true;
     } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
-        //Change mode
+        //Save current mode in the third bit of MOD_IN_
+        MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);    
         deviceMode_ = CHG;
         holdCounter_ = 0;
         deviceModeChanged_ = true;
     } else if (deviceMode_ == CHG && BTN_IN) {
-        //Change mode
-        deviceMode_ = (MOD_IN_ == 0) ? RADIO : A2DP;
+        //Change mode - extract previous mode from third bit of MOD_IN_
+        deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
+        Serial.println(MOD_IN_);
         holdCounter_ = 0;
         deviceModeChanged_ = true;
     } else if (deviceMode_ != CHG && BTN_IN) {
         holdCounter_++;
     } else if (deviceMode_ == NONE && BTN_IN) {
-        deviceMode_ = (MOD_IN_ == 0) ? RADIO : A2DP;
+        //Change mode - extract previous mode from third bit of MOD_IN_
+        deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
+        Serial.println(MOD_IN_);
         holdCounter_ = 0;
         deviceModeChanged_ = true;
     } else if (deviceMode_ == NONE && CHG_IN) {
+        //Change mode MOD_IN_ to charge mode and keep previous mode in third bit
+        MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+        Serial.println(MOD_IN_);
         deviceMode_ = CHG;
         deviceModeChanged_ = true;
     } else if (deviceMode_ == CHG && !CHG_IN) {
         digitalWrite(PIN_PSU_EN,LOW);
+        MOD_IN_ = (NONE & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
         deviceMode_ = NONE;
         deviceModeChanged_ = true;
     } else {
@@ -753,7 +764,7 @@ void readEncState() { //MARK: readEncState
 }
 
 void setup() { //MARK: Setup
-
+    
     pinMode(PIN_PSU_EN,OUTPUT);
     //Enable PSU latch
     digitalWrite(PIN_PSU_EN,HIGH);
@@ -814,19 +825,8 @@ void setup() { //MARK: Setup
         //Serial.print("EEPROM.readByte(0) = %d", mode);
         Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
         //MARK: TIMER3
-        if (MOD_IN_ == 0) { //MARK: MOD_IN
-            // Start in radio mode (default mode
-            deviceMode_ = RADIO;
-        } else if (MOD_IN_ == 1) {
-            // Start in bluetooth mode
-            deviceMode_ = A2DP;
-        } else if (MOD_IN_ == 2) {
-            // Start in charging mode
-            deviceMode_ = CHG;
-        } else {
-            // Start in radio mode (default mode)
-            deviceMode_ = NONE;
-        }
+        deviceMode_ = static_cast<t_DeviceMode>(MOD_IN_ & 0x03);
+        Serial.println(deviceMode_);
         // enum DeviceMode {RADIO = 0, A2DP = 1, CHG = 2, NONE = 3};
         while (deviceMode_ == NONE) {
             delay(1);
@@ -881,7 +881,19 @@ void setup() { //MARK: Setup
     delay(1000);
     pinMode(PIN_AMP_EN,OUTPUT);
     digitalWrite(PIN_AMP_EN,LOW);
-    digitalWrite(PIN_LED_G,LOW);
+    if (deviceMode_ == RADIO) {
+        digitalWrite(PIN_LED_G,LOW);
+    } else if (deviceMode_ == A2DP) {
+        digitalWrite(PIN_LED_B,LOW);
+    } else if (deviceMode_ == CHG) {
+        digitalWrite(PIN_LED_R,LOW);
+    } else {
+        digitalWrite(PIN_LED_R,HIGH);
+        digitalWrite(PIN_LED_G,HIGH);
+        digitalWrite(PIN_LED_B,HIGH);
+    
+    }
+    
 }
 
 
@@ -988,26 +1000,29 @@ void loop() { //MARK: loop
     
 
     if (deviceModeChanged_) {
+        int8_t byteToWrite = MOD_IN_ & 0x04 | (deviceMode_ & 0x03);
+        Serial.print("byteToWrite: ");
+        Serial.println(byteToWrite);
         if (deviceMode_ == RADIO) {
-            EEPROM.writeByte(0, 0); // Enter A2DP mode after restart
+            EEPROM.writeByte(0, byteToWrite); // Enter A2DP mode after restart
             EEPROM.commit();
             Serial.println("Switching to BT!");
             stopRadio(); // Close connections and clean up
             ESP.restart();
         }
         else if (deviceMode_ == A2DP) {
-            EEPROM.writeByte(0, 1); // Enter internet radio mode after restart
+            EEPROM.writeByte(0, byteToWrite); // Enter internet radio mode after restart
             EEPROM.commit();
             Serial.println("Switching to Radio!");
             ESP.restart();
         } else if (deviceMode_ == CHG) {
             Serial.println("Switching to CHG!");
-            EEPROM.writeByte(0, 2); // Enter charging mode after restart
+            EEPROM.writeByte(0, byteToWrite); // Enter charging mode after restart
             EEPROM.commit();
             ESP.restart();
         } else if (deviceMode_ == NONE) {
             Serial.println("Switching to NONE!");
-            EEPROM.writeByte(0, 3); // Enter standby mode after restart
+            EEPROM.writeByte(0, byteToWrite); // Enter standby mode after restart
             EEPROM.commit();
             ESP.restart();
         }
