@@ -1,15 +1,14 @@
-#include <M5StickCPlus.h>
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <Adafruit_SH110X.h>
 #include <Adafruit_GFX.h>
 #include "WifiCredentials.h"
-//#include <WiFi.h> 
 #include "Audio.h"
 #include <EEPROM.h>
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
-//#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
+#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
+#include <ArduinoJson.h>
 
 #define I2S_BCK_PIN 13
 #define I2S_WS_PIN 26
@@ -85,7 +84,6 @@ void IRAM_ATTR encB_ISR();
 
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-
 //TEST STATIONS:
 /** Web radio stream URLs */
 const String stationURLs[] = { //MARK: stationURLs
@@ -99,6 +97,21 @@ const String stationURLs[] = { //MARK: stationURLs
 
 /** Number of stations */
 const uint8_t numStations = sizeof(stationURLs) / sizeof(stationURLs[0]);
+
+const char* apiUrl = "https://internetradioapi.azurewebsites.net/radio/play";
+
+HTTPClient http;
+
+//Variables for website/app
+String RadioURL = "";
+
+String RadioURLPrev = "";
+
+String RadioName = "";
+
+String RadioPlaying = "";
+
+String RadioVolume = "";
 
 Audio *pAudio_ = nullptr;
 TaskHandle_t pAudioTask_ = nullptr;
@@ -202,6 +215,12 @@ int chargeLevel = 0; //MARK: TEMP chargeLevel!
 
 unsigned long previousMillisCHG = 0;
 const long intervalCHG = 1000;
+
+String httpGETRequest(const char* apiUrl);
+
+void getRadioServerData(const char* apiUrl);
+
+bool checkUrlState();
 
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
@@ -1037,6 +1056,18 @@ void loop() { //MARK: loop
       handleSerialCommands();
       readEncState();
       if (deviceMode_ == RADIO) {
+          if ((millis() - lastTime) > timerDelay) {
+            if (WiFi.status()== WL_CONNECTED) {
+                // Check backend for new data if connected to WiFi
+                getRadioServerData(apiUrl);
+                if (checkUrlState()) {
+                    stationChanged_ = true;
+                    Serial.println("Station changed");
+                    Serial.println(RadioURLPrev);
+                }
+            }
+            lastTime = millis();
+          }
           if (volumeCurrentChangedFlag_) {
             showVolume(volumeCurrent_);
           }
@@ -1208,4 +1239,59 @@ void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) { //
 void avrc_volume_change_callback(int vol) { //MARK: avrc_volume_change_callback
     volumeCurrent_ = vol;
     volumeCurrentChangedFlag_ = true;
+}
+
+
+String httpGETRequest(const char* apiUrl) {
+    Serial.println("Trying HTTP GET");
+    String payload = "";
+
+    http.begin(apiUrl);
+    int httpCode = http.GET();
+
+    if (httpCode == HTTP_CODE_OK) {
+        payload = http.getString();
+        Serial.println(payload);
+    } else {
+        Serial.println("Error on HTTP request");
+        Serial.println(http.errorToString(httpCode));
+    }
+    return payload;
+}
+
+void getRadioServerData(const char* apiUrl) {
+    String getRadioInfo = httpGETRequest(apiUrl);
+
+    JSONVar RadioData = JSON.parse(getRadioInfo);
+    if (JSON.typeof(RadioData) == "undefined") {
+        Serial.println("Parsing input failed!");
+        Serial.println(getRadioInfo);
+        return;
+    }
+
+    if (RadioData.length() > 0) {
+        JSONVar data = RadioData[0];
+        if (data.hasOwnProperty("url")) {
+            RadioURL = String((const char*)data["url"]);
+        }
+        if (data.hasOwnProperty("name")) {
+            RadioName = String((const char*)data["name"]);
+        }
+        if (data.hasOwnProperty("isPlaying")) {
+            RadioPlaying = String((const char*)data["isPlaying"]);
+        }
+        if (data.hasOwnProperty("volume")) {
+            RadioVolume = String((const char*)data["volume"]);
+        }
+    } else {
+        Serial.println("No data in JSON");
+    }
+}
+
+bool checkUrlState() {
+    if (RadioURL != RadioURLPrev) {
+        RadioURLPrev = RadioURL;
+        return true;
+    }
+    return false;
 }
