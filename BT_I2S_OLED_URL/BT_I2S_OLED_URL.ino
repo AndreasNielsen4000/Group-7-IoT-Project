@@ -198,6 +198,11 @@ bool display_present = false; //MARK: display_present
 //   return true;
 // }
 
+int chargeLevel = 0; //MARK: TEMP chargeLevel!
+
+unsigned long previousMillisCHG = 0;
+const long intervalCHG = 1000;
+
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
     bool BTN_IN = analogRead(PIN_BTN) >= SW_THRESHOLD;
@@ -994,7 +999,7 @@ void handleSerialCommands() { //MARK: handleSerialCommands
             }
         }
     }
-}
+}        
 
 void loop() { //MARK: loop
     
@@ -1031,53 +1036,7 @@ void loop() { //MARK: loop
       
       handleSerialCommands();
       readEncState();
-      // if (buttonState_1) {
-      //     if (deviceMode_ == RADIO) {
-      //         EEPROM.writeByte(0, 1); // Enter A2DP mode after restart
-      //         EEPROM.commit();
-      //         Serial.println("Switching to BT!");
-      //         stopRadio(); // Close connections and clean up
-      //     }
-      //     else {
-      //         EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
-      //         EEPROM.commit();
-      //         Serial.println("Switching to Radio!");
-      //     }
-      //     ESP.restart();
-      // }
-
       if (deviceMode_ == RADIO) {
-
-          // Button A: Switch to next station
-          // if (buttonState_2) {
-              
-          //     // Turn down volume
-          //     volumeCurrent_ = 0;
-          //     volumeCurrentF_ = 0.0f;
-          //     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
-
-          //     // Advance station index to next station
-          //     stationIndex_ = (stationIndex_ + 1) % numStations;
-          //     stationChanged_ = true; // Raise flag for the audio task
-
-          //     // Erase station name
-          //     stationStr_ = "";
-          //     stationUpdatedFlag_ = true; // Raise flag for display update routine
-
-          //     // Erase stream info
-          //     infoStr_ = "";
-          //     infoUpdatedFlag_ = true; // Raise flag for display update routine
-          // }
-          // else {
-              // Increase volume gradually after station change
-              // if (!stationChangedMute_ && volumeCurrent_ < volumeNormal_) {
-              //     volumeCurrentF_ += 0.25;
-              //     volumeCurrent_ = (uint8_t) volumeCurrentF_;
-              //     volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
-
-              //     showVolume(volumeCurrent_);
-              // }
-          // }
           if (volumeCurrentChangedFlag_) {
             showVolume(volumeCurrent_);
           }
@@ -1124,7 +1083,31 @@ void loop() { //MARK: loop
               showPlayState(a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED);
               vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
       } else if (deviceMode_ == CHG) {
-          vTaskDelay(200 / portTICK_PERIOD_MS);
+        // int chargeLevel = analogRead(PIN_BAT);
+            unsigned long currentMillisCHG = millis();
+
+        if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
+            previousMillisCHG = currentMillisCHG;
+
+            if (chargeLevel < 30) {
+                digitalWrite(PIN_LED_R, !digitalRead(PIN_LED_R)); // Toggle red LED
+                digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
+                digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
+            } else if (chargeLevel >= 30 && chargeLevel <= 70) {
+                digitalWrite(PIN_LED_B, !digitalRead(PIN_LED_B)); // Toggle blue LED
+                digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
+                digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
+            } else if (chargeLevel > 70) {
+                digitalWrite(PIN_LED_G, !digitalRead(PIN_LED_G)); // Toggle green LED
+                digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
+                digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
+            }
+
+            chargeLevel += 10;
+            if (chargeLevel > 100) {
+                chargeLevel = 0;
+            }
+        }
       } else if (deviceMode_ == NONE) {
         // Neither radio, A2DP or CHG
         vTaskDelay(200 / portTICK_PERIOD_MS);
