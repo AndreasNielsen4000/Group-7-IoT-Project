@@ -205,58 +205,115 @@ const long intervalCHG = 1000;
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
     bool BTN_IN = analogRead(PIN_BTN) >= SW_THRESHOLD;
-    if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
-        deviceMode_ = A2DP;
-        MOD_IN_ = (A2DP & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-        holdCounter_ = 0;
-        deviceModeChanged_ = true;
-        //Change mode
-    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
-        deviceMode_ = RADIO;
-        MOD_IN_ = (RADIO & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-        holdCounter_ = 0;
-        deviceModeChanged_ = true;
-        //Change mode
-    } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
-        //Save current mode in the third bit of MOD_IN_
-        MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-        deviceMode_ = CHG;
-        holdCounter_ = 0;
-        deviceModeChanged_ = true;
-    } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
-        //Save current mode in the third bit of MOD_IN_
-        MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);    
-        deviceMode_ = CHG;
-        holdCounter_ = 0;
-        deviceModeChanged_ = true;
-    } else if (deviceMode_ == CHG && BTN_IN) {
-        //Change mode - extract previous mode from third bit of MOD_IN_
-        deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
-        Serial.println(MOD_IN_);
-        holdCounter_ = 0;
-        deviceModeChanged_ = true;
-    } else if (deviceMode_ != CHG && BTN_IN) {
+    if (BTN_IN) {
         holdCounter_++;
-    } else if (deviceMode_ == NONE && BTN_IN) {
-        //Change mode - extract previous mode from third bit of MOD_IN_
-        deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
-        Serial.println(MOD_IN_);
-        holdCounter_ = 0;
-        deviceModeChanged_ = true;
-    } else if (deviceMode_ == NONE && CHG_IN) {
-        //Change mode MOD_IN_ to charge mode and keep previous mode in third bit
-        MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-        Serial.println(MOD_IN_);
-        deviceMode_ = CHG;
-        deviceModeChanged_ = true;
-    } else if (deviceMode_ == CHG && !CHG_IN) {
-        digitalWrite(PIN_PSU_EN,LOW);
-        MOD_IN_ = (NONE & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-        deviceMode_ = NONE;
-        deviceModeChanged_ = true;
-    } else {
-        holdCounter_ = 0;
     }
+    switch (deviceMode_) {
+    case RADIO:
+        if (!BTN_IN && holdCounter_ >= BTN_SINGLE_PRESS) {
+            deviceMode_ = A2DP;
+            MOD_IN_ = (deviceMode_ & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+            holdCounter_ = 0;
+            deviceModeChanged_ = true;
+        } else if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
+            //Save current mode in the third bit of MOD_IN_
+            MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+            deviceMode_ = CHG;
+            holdCounter_ = 0;
+            deviceModeChanged_ = true;
+        }
+        break;
+    case A2DP:
+        if (!BTN_IN && holdCounter_ >= BTN_SINGLE_PRESS) {
+            deviceMode_ = RADIO;
+            MOD_IN_ = (deviceMode_ & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+            holdCounter_ = 0;
+            deviceModeChanged_ = true;
+        } else if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
+            //Save current mode in the third bit of MOD_IN_
+            MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+            deviceMode_ = CHG;
+            holdCounter_ = 0;
+            deviceModeChanged_ = true;
+        }
+        break;
+    case CHG:
+        digitalWrite(PIN_PSU_EN,LOW);
+        if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
+            deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
+            holdCounter_ = 0;
+            deviceModeChanged_ = true;
+        }
+        if (holdCounter_ > BTN_SINGLE_PRESS) {
+          holdCounter_ = 0;
+        }
+        break;
+    case NONE:
+        digitalWrite(PIN_PSU_EN,HIGH);
+        if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
+            deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
+            holdCounter_ = 0;
+            deviceModeChanged_ = true;
+        }
+        if (holdCounter_ > BTN_SINGLE_PRESS) {
+          holdCounter_ = 0;
+        }
+        break;
+    default:
+        break;
+    }
+    // if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
+    //     deviceMode_ = A2DP;
+    //     MOD_IN_ = (A2DP & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+    //     holdCounter_ = 0;
+    //     deviceModeChanged_ = true;
+    //     //Change mode
+    // } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
+    //     deviceMode_ = RADIO;
+    //     MOD_IN_ = (RADIO & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+    //     holdCounter_ = 0;
+    //     deviceModeChanged_ = true;
+    //     //Change mode
+    // } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
+    //     //Save current mode in the third bit of MOD_IN_
+    //     MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+    //     deviceMode_ = CHG;
+    //     holdCounter_ = 0;
+    //     deviceModeChanged_ = true;
+    // } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
+    //     //Save current mode in the third bit of MOD_IN_
+    //     MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);    
+    //     deviceMode_ = CHG;
+    //     holdCounter_ = 0;
+    //     deviceModeChanged_ = true;
+    // } else if (deviceMode_ == CHG && BTN_IN) {
+    //     //Change mode - extract previous mode from third bit of MOD_IN_
+    //     deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
+    //     Serial.println(MOD_IN_);
+    //     holdCounter_ = 0;
+    //     deviceModeChanged_ = true;
+    // } else if (deviceMode_ != CHG && BTN_IN) {
+    //     holdCounter_++;
+    // } else if (deviceMode_ == NONE && BTN_IN) {
+    //     //Change mode - extract previous mode from third bit of MOD_IN_
+    //     deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
+    //     Serial.println(MOD_IN_);
+    //     holdCounter_ = 0;
+    //     deviceModeChanged_ = true;
+    // } else if (deviceMode_ == NONE && CHG_IN) {
+    //     //Change mode MOD_IN_ to charge mode and keep previous mode in third bit
+    //     MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+    //     Serial.println(MOD_IN_);
+    //     deviceMode_ = CHG;
+    //     deviceModeChanged_ = true;
+    // } else if (deviceMode_ == CHG && !CHG_IN) {
+    //     digitalWrite(PIN_PSU_EN,LOW);
+    //     MOD_IN_ = (NONE & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
+    //     deviceMode_ = NONE;
+    //     deviceModeChanged_ = true;
+    // } else {
+    //     holdCounter_ = 0;
+    // }
     return true;
 }
 
