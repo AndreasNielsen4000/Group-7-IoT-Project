@@ -50,6 +50,8 @@
 #define BTN_SINGLE_PRESS 20
 // #define BTN_LONG_PRESS 25 
 
+#define PIN_BATT 39
+
 // ESP32Timer Timer0(0); //4 timers are available (from 0 to 3)
 ESP32Timer Timer3(3);
 
@@ -98,20 +100,24 @@ const String stationURLs[] = { //MARK: stationURLs
 /** Number of stations */
 const uint8_t numStations = sizeof(stationURLs) / sizeof(stationURLs[0]);
 
-const char* apiUrl = "https://internetradioapi.azurewebsites.net/radio/play";
+const char* apiUrlGet_ = "https://internetradioapi.azurewebsites.net/radio/play";
 
-HTTPClient http;
+const char* apiUrlBatteryPost_ = "https://internetradioapi.azurewebsites.net/radio/battery";
+
+HTTPClient httpGet;
+
+HTTPClient httpPost;
 
 //Variables for website/app
-String RadioURL = "";
+String RadioURL_ = "";
 
 String RadioURLPrev = "";
 
-String RadioName = "";
+String RadioName_ = "";
 
-String RadioPlaying = "";
+String RadioPlaying_ = "";
 
-String RadioVolume = "";
+String RadioVolume_ = "";
 
 Audio *pAudio_ = nullptr;
 TaskHandle_t pAudioTask_ = nullptr;
@@ -217,10 +223,16 @@ unsigned long previousMillisCHG = 0;
 const long intervalCHG = 1000;
 
 unsigned long lastTime = 0;
+unsigned long lastTimeBattery = 0;
 // Timer set to 10 minutes (600000)
 //unsigned long timerDelay = 600000;
 // Set timer to 5 seconds (5000)
 unsigned long timerDelay = 5000;
+unsigned long timerDelayBattery = 600000;
+
+void httpPostRequest(const char* apiUrl, String payload);
+
+String processBatteryLevel(void);
 
 String httpGETRequest(const char* apiUrl);
 
@@ -1028,7 +1040,6 @@ void handleSerialCommands() { //MARK: handleSerialCommands
 
 void loop() { //MARK: loop
     
-
     if (deviceModeChanged_) {
         int8_t byteToWrite = MOD_IN_ & 0x04 | (deviceMode_ & 0x03);
         Serial.print("byteToWrite: ");
@@ -1065,7 +1076,7 @@ void loop() { //MARK: loop
           if ((millis() - lastTime) > timerDelay) {
             if (WiFi.status()== WL_CONNECTED) {
                 // Check backend for new data if connected to WiFi
-                getRadioServerData(apiUrl);
+                getRadioServerData(apiUrlGet_);
                 if (checkUrlState()) {
                     stationChanged_ = true;
                     Serial.println("Station changed");
@@ -1073,6 +1084,13 @@ void loop() { //MARK: loop
                 }
             }
             lastTime = millis();
+          }
+          if ((millis() - lastTimeBattery) > timerDelayBattery) {
+            if (WiFi.status() == WL_CONNECTED) {
+                String batteryLevel = processBatteryLevel();
+                httpPostRequest(apiUrlBatteryPost_, batteryLevel);
+            }
+            lastTimeBattery = millis();
           }
           if (volumeCurrentChangedFlag_) {
             showVolume(volumeCurrent_);
@@ -1260,15 +1278,15 @@ String httpGETRequest(const char* apiUrl) {
     Serial.println("Trying HTTP GET");
     String payload = "";
 
-    http.begin(apiUrl);
-    int httpCode = http.GET();
+    httpGet.begin(apiUrl);
+    int httpCode = httpGet.GET();
 
     if (httpCode == HTTP_CODE_OK) {
-        payload = http.getString();
+        payload = httpGet.getString();
         Serial.println(payload);
     } else {
         Serial.println("Error on HTTP request");
-        Serial.println(http.errorToString(httpCode));
+        Serial.println(httpGet.errorToString(httpCode));
     }
     return payload;
 }
@@ -1286,16 +1304,16 @@ void getRadioServerData(const char* apiUrl) {
     if (RadioData.length() > 0) {
         JSONVar data = RadioData[0];
         if (data.hasOwnProperty("url")) {
-            RadioURL = String((const char*)data["url"]);
+            RadioURL_ = String((const char*)data["url"]);
         }
         if (data.hasOwnProperty("name")) {
-            RadioName = String((const char*)data["name"]);
+            RadioName_ = String((const char*)data["name"]);
         }
         if (data.hasOwnProperty("isPlaying")) {
-            RadioPlaying = String((const char*)data["isPlaying"]);
+            RadioPlaying_ = String((const char*)data["isPlaying"]);
         }
         if (data.hasOwnProperty("volume")) {
-            RadioVolume = String((const char*)data["volume"]);
+            RadioVolume_ = String((const char*)data["volume"]);
         }
     } else {
         Serial.println("No data in JSON");
@@ -1303,9 +1321,35 @@ void getRadioServerData(const char* apiUrl) {
 }
 
 bool checkUrlState() {
-    if (RadioURL != RadioURLPrev) {
-        RadioURLPrev = RadioURL;
+    if (RadioURL_ != RadioURLPrev) {
+        RadioURLPrev = RadioURL_;
         return true;
     }
     return false;
+}
+
+void httpPostRequest(const char* apiUrl, String payload) {
+    Serial.println("Trying HTTP POST");
+    httpPost.begin(apiUrl);
+
+    httpPost.addHeader("Content-Type", "application/json");
+
+    int httpCode = httpPost.POST(payload);
+
+    if (httpCode == HTTP_CODE_OK) {
+        String payload = httpPost.getString();
+        Serial.println(payload);
+    } else {
+        Serial.println("Error on HTTP request");
+        Serial.println(httpPost.errorToString(httpCode));
+    }
+}
+
+String processBatteryLevel(void) {
+    String levelString = "{\"level\":\"XX\"}";        // initialising generic level string
+    float voltage = analogRead(PIN_BATT)*3.3/4096*6;  // Reading an calculating voltage level
+    int8_t percent = (voltage/12.4)*100;              // Converting to percent
+    levelString.replace("XX", (String) percent);      // Adding the percent to the levelString
+
+    return levelString;
 }
