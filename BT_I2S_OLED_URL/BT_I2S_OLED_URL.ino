@@ -696,7 +696,7 @@ void stopA2dp() {
  * - b = true  --> GPIO_0 = 0 : Shutdown enabled
  * - b = false --> GPIO_0 = 1 : Shutdown disabled
  */
-void setAudioShutdown(bool b) { //MARK: setAudioShutdown
+void setAudioShutdown(bool b) { //MARK: setAudioShutdown //TODO: Change to amplifier and change in code.
     /*
     if (b) {
         gpio_set_level(GPIO_NUM_0, 0); // Enable shutdown circuit
@@ -728,8 +728,11 @@ void audioProcessing(void *p) { //MARK: audioProcessing
             stationChangedMute_ = true; // Mute audio until stream becomes stable
 
             // Establish HTTP connection to requested stream URL
-            const char *streamUrl = stationURLs[stationIndex_].c_str();
-
+            //const char *streamUrl = stationURLs[stationIndex_].c_str();
+            Serial.print("URL: ");
+            Serial.println(RadioURLPrev.c_str());
+            RadioURLPrev.trim();
+            const char *streamUrl = RadioURLPrev.c_str();
             bool success = pAudio_->connecttohost( streamUrl );
 
             if (success) {
@@ -758,7 +761,7 @@ void audioProcessing(void *p) { //MARK: audioProcessing
             }
             else {
                 // If the stream does not build up within a few seconds something is wrong with the connection
-                if ( millis() - timeConnect_ > 3000 ) {
+                if ( millis() - timeConnect_ > 5000 ) {
                     if (!connectionError_) {
                         //Serial.printf("Audio buffer low: %u of %u bytes.\n", audioBufferFilled_, audioBufferSize_);
                         connectionError_ = true; // Raise connection error flag
@@ -771,7 +774,7 @@ void audioProcessing(void *p) { //MARK: audioProcessing
         pAudio_->loop();
 
         audioBufferFilled_ = pAudio_->inBufferFilled(); // Update used buffer capacity
-        vTaskDelay(1 / portTICK_PERIOD_MS); // Let other tasks execute
+        vTaskDelay(5 / portTICK_PERIOD_MS); // Let other tasks execute
 
     }
     
@@ -1288,6 +1291,7 @@ String httpGETRequest(const char* apiUrl) {
         Serial.println("Error on HTTP request");
         Serial.println(httpGet.errorToString(httpCode));
     }
+    http.end();
     return payload;
 }
 
