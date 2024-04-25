@@ -1,4 +1,3 @@
-//#include <M5StickCPlus.h>
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <Adafruit_SH110X.h>
@@ -10,6 +9,15 @@
 #include "ESP32_New_TimerInterrupt.h"
 //#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
 
+//NRF PINS
+#define PIN_NRF_CE 17
+#define PIN_NRF_CSN 16
+#define PIN_NRF_IRQ 4
+#define PIN_NRF_MISO 19
+#define PIN_NRF_MOSI 23
+#define PIN_NRF_SCK 18
+
+//I2S PINS & INFO
 #define I2S_BCK_PIN 13
 #define I2S_WS_PIN 26
 #define I2S_DOUT_PIN 25
@@ -17,18 +25,22 @@
 #define BITS 16
 #define CHANNELS 2
 
+//LED & BUTTON PINS
 #define PIN_LED 0
-#define PIN_PSU_EN 33
 #define PIN_BTN 35
 #define PIN_ENC_A 27
 #define PIN_ENC_B 14
 #define PIN_LED_R 32
 #define PIN_LED_G 15
 #define PIN_LED_B 5
+
+//I2C PINS
 #define PIN_I2C_SDA 21
 #define PIN_I2C_SCL 22
-#define PIN_AMP_EN 2
 
+//AMP & PSU PINS
+#define PIN_AMP_EN 2
+#define PIN_PSU_EN 33
 #define PD_MUTE 12 //MARK: PD_MUTE - CHECK
 
 #define PD_I2C_ADR  0x28   //0101000
@@ -49,6 +61,8 @@
 
 #define BTN_SINGLE_PRESS 20
 // #define BTN_LONG_PRESS 25 
+
+#define PIN_BATT 39
 
 // ESP32Timer Timer0(0); //4 timers are available (from 0 to 3)
 ESP32Timer Timer3(3);
@@ -262,58 +276,6 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     default:
         break;
     }
-    // if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
-    //     deviceMode_ = A2DP;
-    //     MOD_IN_ = (A2DP & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-    //     holdCounter_ = 0;
-    //     deviceModeChanged_ = true;
-    //     //Change mode
-    // } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ >= BTN_SINGLE_PRESS) {
-    //     deviceMode_ = RADIO;
-    //     MOD_IN_ = (RADIO & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-    //     holdCounter_ = 0;
-    //     deviceModeChanged_ = true;
-    //     //Change mode
-    // } else if (deviceMode_ == RADIO && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
-    //     //Save current mode in the third bit of MOD_IN_
-    //     MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-    //     deviceMode_ = CHG;
-    //     holdCounter_ = 0;
-    //     deviceModeChanged_ = true;
-    // } else if (deviceMode_ == A2DP && !BTN_IN && holdCounter_ > 0 && holdCounter_ < BTN_SINGLE_PRESS) {
-    //     //Save current mode in the third bit of MOD_IN_
-    //     MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);    
-    //     deviceMode_ = CHG;
-    //     holdCounter_ = 0;
-    //     deviceModeChanged_ = true;
-    // } else if (deviceMode_ == CHG && BTN_IN) {
-    //     //Change mode - extract previous mode from third bit of MOD_IN_
-    //     deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
-    //     Serial.println(MOD_IN_);
-    //     holdCounter_ = 0;
-    //     deviceModeChanged_ = true;
-    // } else if (deviceMode_ != CHG && BTN_IN) {
-    //     holdCounter_++;
-    // } else if (deviceMode_ == NONE && BTN_IN) {
-    //     //Change mode - extract previous mode from third bit of MOD_IN_
-    //     deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
-    //     Serial.println(MOD_IN_);
-    //     holdCounter_ = 0;
-    //     deviceModeChanged_ = true;
-    // } else if (deviceMode_ == NONE && CHG_IN) {
-    //     //Change mode MOD_IN_ to charge mode and keep previous mode in third bit
-    //     MOD_IN_ = (CHG & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-    //     Serial.println(MOD_IN_);
-    //     deviceMode_ = CHG;
-    //     deviceModeChanged_ = true;
-    // } else if (deviceMode_ == CHG && !CHG_IN) {
-    //     digitalWrite(PIN_PSU_EN,LOW);
-    //     MOD_IN_ = (NONE & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
-    //     deviceMode_ = NONE;
-    //     deviceModeChanged_ = true;
-    // } else {
-    //     holdCounter_ = 0;
-    // }
     return true;
 }
 
