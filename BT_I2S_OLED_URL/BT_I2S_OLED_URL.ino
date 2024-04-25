@@ -222,7 +222,6 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     processBatteryLevel();
     switch (deviceMode_) {
     case RADIO:
-        digitalWrite(PIN_PSU_EN,HIGH);
         if (!BTN_IN && holdCounter_ >= BTN_SINGLE_PRESS) {
             deviceMode_ = A2DP;
             MOD_IN_ = (deviceMode_ & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
@@ -237,7 +236,6 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
         }
         break;
     case A2DP:
-        digitalWrite(PIN_PSU_EN,HIGH);
         if (!BTN_IN && holdCounter_ >= BTN_SINGLE_PRESS) {
             deviceMode_ = RADIO;
             MOD_IN_ = (deviceMode_ & 0x03) | ((deviceMode_ == A2DP ? 1 : 0) << 2);
@@ -252,7 +250,7 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
         }
         break;
     case CHG:
-        digitalWrite(PIN_PSU_EN,HIGH); //MARK: Change to low
+        digitalWrite(PIN_PSU_EN,LOW); //MARK: Change to low
         if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
             deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
             holdCounter_ = 0;
