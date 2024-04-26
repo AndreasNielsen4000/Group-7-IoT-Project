@@ -116,16 +116,22 @@ void loop() {
         Serial.print("RadioURL: ");
         Serial.println(oldUrlString);
         // Calculate the number of parts
-        int numParts = (oldUrlString.length() / 32) + 1;
+        int numParts = (oldUrlString.length() / 30) + 1;
 
         // Split the string into parts and send each part
         for (int i = 0; i < numParts; i++) {
             // Get the current part
-            String part = oldUrlString.substring(i * 32, (i + 1) * 32);
+            String part = oldUrlString.substring(i * 30, (i + 1) * 30);
 
             // Convert the part to a character array
-            char partCharArray[part.length() + 1];
+            char partCharArray[part.length() + 1] = {0};
+            partCharArray[part.length()] = '\0';
             part.toCharArray(partCharArray, sizeof(partCharArray));
+            Serial.print("Part ");
+            Serial.print(i);
+            Serial.print(": ");
+            Serial.println(partCharArray);
+
 
             // Send the part
             radio.stopListening();
