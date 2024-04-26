@@ -8,6 +8,8 @@
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
 //#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
+#include <RF24.h>
+#include <nRF24L01.h>
 
 //NRF PINS
 #define PIN_NRF_CE 17
@@ -96,6 +98,10 @@ void IRAM_ATTR encB_ISR();
 
 
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+//Initialize NRF
+RF24 nrfLink(PIN_NRF_CE, PIN_NRF_CSN);
+int8_t channel = 0x76;
 
 
 //TEST STATIONS:
@@ -212,6 +218,12 @@ bool display_present = false; //MARK: display_present
 
 unsigned long previousMillisCHG = 0;
 const long intervalCHG = 1000;
+
+//nRFLink receive variables
+String url_ = "";
+String urlPlaceholder_ = "";
+bool isReadingUrl_ = false;
+
 
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
@@ -718,7 +730,13 @@ void audioProcessing(void *p) { //MARK: audioProcessing
             stationChangedMute_ = true; // Mute audio until stream becomes stable
 
             // Establish HTTP connection to requested stream URL
-            const char *streamUrl = stationURLs[stationIndex_].c_str();
+            //const char *streamUrl = stationURLs[stationIndex_].c_str();
+            if (urlPlaceholder_ == "") {
+                url_ = stationURLs[stationIndex_];
+            } else {
+                url_ = urlPlaceholder_;
+            }
+            const char *streamUrl = url_.c_str();
 
             bool success = pAudio_->connecttohost( streamUrl );
 
@@ -921,6 +939,14 @@ void setup() { //MARK: Setup
         digitalWrite(PIN_LED_G,HIGH);
         digitalWrite(PIN_LED_B,HIGH);
     }
+    //Setup NRF
+    nrfLink.begin();
+    nrfLink.setChannel(channel);
+    nrfLink.setDataRate(RF24_1MBPS);
+    nrfLink.setPALevel(RF24_PA_HIGH);
+    nrfLink.openWritingPipe(0xF0F0F0F0E1LL);
+    nrfLink.openReadingPipe(1,0xF0F0F0F0E1LL);
+    nrfLink.startListening();
 }
 
 
@@ -1023,6 +1049,118 @@ void handleSerialCommands() { //MARK: handleSerialCommands
     }
 }        
 
+bool isValidUrlChar(char c) {
+    return (isalnum(c) || strchr("-._~:/?#[]@!$&'()*+,;=", c) != NULL);
+}
+
+void nrfCheck() { //TODO: if not working, print hex value
+    if (nrfLink.available()) {
+        char rxBuffer[32];
+        memset(rxBuffer, 0, sizeof(rxBuffer)); // Initialize with zeros
+    
+        // Read data into the buffer
+        nrfLink.read(&rxBuffer, sizeof(rxBuffer) - 1); // Leave space for null-terminator
+
+        char* startURL = isReadingUrl_ ? rxBuffer : strstr(rxBuffer, "UL=");
+        if (startURL != NULL) {
+            startURL += 3; // Skip "UL="
+            urlPlaceholder_ = "";
+            isReadingUrl_ = true;
+        }
+
+        if (isReadingUrl_) {
+            char* end = strstr(startURL, "=UL");
+            if (end != NULL) {
+                while (startURL != end) {
+                    if (isValidUrlChar(*startURL)) {
+                        urlPlaceholder_ += *startURL;
+                    }
+                    startURL++;
+                }
+                urlPlaceholder_.trim();
+                Serial.print("URL: ");
+                Serial.println(urlPlaceholder_);
+                isReadingUrl_ = false;
+                stationChanged_ = true;
+            } else {
+                // If we didn't find the end of the URL, append the whole buffer
+                // But ensure we're not reading past the end of rxBuffer
+                while (*startURL && startURL < rxBuffer + sizeof(rxBuffer)) {
+                    if (isValidUrlChar(*startURL)) {
+                        urlPlaceholder_ += *startURL;
+                    }
+                    startURL++;
+                }
+            }
+        }
+        String isPlaying = "";
+        char* startPS = strstr(rxBuffer, "PS=");
+        if (startPS != NULL && !isReadingUrl_) {
+            startPS += 3; // Skip "PS="
+            char* endPS = strstr(startPS, "=PS");
+            if (endPS != NULL) {
+                // Copy the playing state
+                while (startPS != endPS) {
+                    isPlaying += *startPS;
+                    startPS++;
+                }
+            } else {
+                isPlaying += startPS;
+            }
+        }
+        if (isPlaying == "false") {
+            if (deviceMode_ == A2DP){
+                a2dp_.pause();
+            } else if (deviceMode_ == RADIO) {
+                // Stop
+                pAudio_->stopSong();
+                setAudioShutdown(true); // Turn off amplifier
+                stationChangedMute_ = true; // Mute audio until stream becomes stable
+            }
+        } else if (isPlaying == "true") {
+            if (deviceMode_ == A2DP){
+                a2dp_.play();
+            } else if (deviceMode_ == RADIO) {
+                // Start
+                setAudioShutdown(false); // Turn on amplifier
+                stationChangedMute_ = false; // Unmute audio
+                stationChanged_ = true; // Raise flag for the audio task
+                stationUpdatedFlag_ = true; // Raise flag for display update routine
+                infoUpdatedFlag_ = true; // Raise flag for display update routine
+            }
+        }
+        String volume = "";
+        char* startVO = strstr(rxBuffer, "VO=");
+        if (startVO != NULL && !isReadingUrl_) {
+            startVO += 3; // Skip "VO="
+            char* endVO = strstr(startVO, "=VO");
+            if (endVO != NULL) {
+                // Copy the volume
+                while (startVO != endVO) {
+                    volume += *startVO;
+                    startVO++;
+                }
+            } else {
+                volume += startVO;
+            }
+        }
+        if (volume != "") {
+            int volumeParsed = volume.toInt();
+            if (volumeParsed < 0) {
+                volumeParsed = 0;
+            } else if (volumeParsed > 127) {
+                volumeParsed = 127;
+            }
+            if (deviceMode_ == A2DP){
+                a2dp_.set_volume(volumeParsed);
+            } else if (deviceMode_ == RADIO) {
+                volumeCurrent_ = volumeParsed;
+                volumeCurrentChangedFlag_ = true;
+            }
+        }
+    }
+}
+
 void processBatteryLevel(void){ //MARK: processBatteryLevel
   float voltage = analogRead(PIN_BATT)*3.3/4096*6;  // Reading an calculating voltage level
   int8_t percent = (voltage/12.4)*100;              // Converting to percent
@@ -1067,6 +1205,7 @@ void loop() { //MARK: loop
     } else {
       unsigned long currentMillisCHG = millis();
       handleSerialCommands();
+      nrfCheck();
       readEncState();
       if (deviceMode_ == !CHG) {
         if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
