@@ -9,7 +9,9 @@
 #include "ESP32_New_TimerInterrupt.h"
 //#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
 #include <RF24.h>
-#include <nRF24L01.h>
+//#include <nRF24L01.h>
+#include <RF24Network.h>
+
 
 //NRF PINS
 #define PIN_NRF_CE 17
@@ -102,6 +104,9 @@ Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 //Initialize NRF
 RF24 nrfLink(PIN_NRF_CE, PIN_NRF_CSN);
 int8_t channel = 0x76;
+RF24Network nrfNetwork(nrfLink);
+const uint16_t thisNode = 01;
+const uint16_t otherNode = 00;
 
 
 //TEST STATIONS:
@@ -134,7 +139,7 @@ enum DeviceMode {RADIO = 0, A2DP = 1, CHG = 2, NONE = 3};
 
 typedef enum DeviceMode t_DeviceMode;
 
-// Current device mode (initialization as 'RADIO')
+// Current device mode (initialization as 'NONE')
 t_DeviceMode deviceMode_ = NONE;
 
 // Flag indicating that deviceMode has changed
@@ -191,6 +196,9 @@ float_t volumeCurrentF_ = 0.0f;
 // Flag indicating the volume needs to be set by the audio task
 bool volumeCurrentChangedFlag_ = true;
 
+// Playstate of the audio stream
+bool isPlaying_ = false;
+
 // Audio volume that is set during normal operation
 uint8_t volumeNormal_ = 20;
 
@@ -224,6 +232,21 @@ String url_ = "";
 String urlPlaceholder_ = "";
 bool isReadingUrl_ = false;
 
+#define MAX_URL_LENGTH 141 // Define the maximum length of the URL
+
+struct nrfReceivePayload_t {
+    char url[MAX_URL_LENGTH];
+    bool isPlaying;
+    int8_t volume;
+    uint8_t paramBitMask; // 0b00000000 <- 00 unused 0/1 url 0/1 isPlaying 0/1 volume 0/1 deviceModeChanged 00/01/10/11 deviceMode
+};
+
+struct nrfTransmitPayload_t {
+    bool isPlaying;
+    DeviceMode deviceMode;
+    int8_t volume;
+    int8_t batteryLevel;
+};
 
 bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     /*Power logic*/ 
@@ -231,7 +254,7 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
     if (BTN_IN) {
         holdCounter_++;
     }
-    processBatteryLevel();
+    
     switch (deviceMode_) {
     case RADIO:
         if (!BTN_IN && holdCounter_ >= BTN_SINGLE_PRESS) {
@@ -271,7 +294,7 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
         if (holdCounter_ > BTN_SINGLE_PRESS) {
           holdCounter_ = 0;
         }
-        if (!digitalRead(PIN_CHG)) {
+        if (digitalRead(PIN_CHG)) {
             deviceMode_ = NONE;
             MOD_IN_ = (deviceMode_ & 0x07); 
             holdCounter_ = 0;
@@ -288,7 +311,7 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
         if (holdCounter_ > BTN_SINGLE_PRESS) {
           holdCounter_ = 0;
         }
-        if (digitalRead(PIN_CHG)) {
+        if (!digitalRead(PIN_CHG)) {
             deviceMode_ = CHG;
             MOD_IN_ = (deviceMode_ & 0x07); 
             holdCounter_ = 0;
@@ -396,8 +419,14 @@ void showStation() { //MARK: showStation
         else {
             display.print("Bluetooth");
         }
-        display.setCursor(0,20);
-        display.print(stationStr_);
+        if (!connectionError_) {
+            display.setCursor(0,20);
+            display.print(stationStr_);
+        }
+        else {
+            display.setCursor(0,20);
+            display.print("Connection error");
+        }
         if (deviceMode_ == RADIO) {
             display.setCursor(100,0);
             display.print("WiFi");
@@ -410,6 +439,9 @@ void showStation() { //MARK: showStation
     } else {
         Serial.print("Station: ");
         Serial.println(stationStr_);
+        if (connectionError_) {
+            Serial.println("Connection error");
+        }
     }
 }
 
@@ -537,7 +569,7 @@ void startRadio() { //MARK: startRadio()
             display.display();
         }
         Serial.print("\nIP:");
-        Serial.print(WiFi.localIP().toString().c_str());
+        Serial.println(WiFi.localIP().toString().c_str());
 
         pAudio_ = new Audio(false); // Use external DAC
 
@@ -556,6 +588,7 @@ void startRadio() { //MARK: startRadio()
         if (display_present) {
             display.clearDisplay();
         }
+        isPlaying_ = true;
     }
     else {
         log_w("'pAudio_' not cleaned up!");
@@ -612,7 +645,7 @@ void stopRadio() { //MARK: stopRadio()
     else {
         log_w("Cannot clean up 'pAudio_'!");
     }
-
+    isPlaying_ = false;
     //Serial.print("End: free heap = %d, max alloc heap = %d", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
@@ -870,8 +903,7 @@ void setup() { //MARK: Setup
         //uint8_t mode = EEPROM.readByte(0);
         MOD_IN_ = EEPROM.readByte(0);
         Serial.print("EEPROM.readByte(0) = ");
-        Serial.println(MOD_IN_);
-        Serial.println(EEPROM.readByte(0));
+        Serial.println(MOD_IN_,BIN);
         //Serial.print("EEPROM.readByte(0) = %d", mode);
         Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
         //MARK: TIMER3
@@ -940,13 +972,23 @@ void setup() { //MARK: Setup
         digitalWrite(PIN_LED_B,HIGH);
     }
     //Setup NRF
-    nrfLink.begin();
-    nrfLink.setChannel(channel);
-    nrfLink.setDataRate(RF24_1MBPS);
-    nrfLink.setPALevel(RF24_PA_HIGH);
-    nrfLink.openWritingPipe(0xF0F0F0F0E1LL);
-    nrfLink.openReadingPipe(1,0xF0F0F0F0E1LL);
-    nrfLink.startListening();
+    if (!nrfLink.begin()) {
+        Serial.println("Failed to communicate with nRF24L01");
+        for (int i = 0; i < 3; i++) {
+            Serial.println("Failed to communicate with nRF24L01");
+            delay(1000);
+        }
+    } else {
+        Serial.println("nRF24L01 communication established");
+        nrfLink.setChannel(channel);
+        nrfNetwork.begin(thisNode);
+    }
+    
+    // nrfLink.setDataRate(RF24_1MBPS);
+    // nrfLink.setPALevel(RF24_PA_HIGH);
+    // nrfLink.openWritingPipe(0xF0F0F0F0E1LL);
+    // nrfLink.openReadingPipe(1,0xF0F0F0F0E1LL);
+    // nrfLink.startListening();
 }
 
 
@@ -1049,117 +1091,86 @@ void handleSerialCommands() { //MARK: handleSerialCommands
     }
 }        
 
-bool isValidUrlChar(char c) {
-    return (isalnum(c) || strchr("-._~:/?#[]@!$&'()*+,;=", c) != NULL);
+void nrfTransmit() { //MARK: nrfTransmit
+    bool playstate = false;
+    if (deviceMode_ == A2DP) {
+        playstate = a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED;
+    } else if (deviceMode_ == RADIO) {
+        playstate = isPlaying_;
+    } else {
+        playstate = false;
+    }
+    nrfTransmitPayload_t payload;
+    payload.isPlaying = playstate;
+    payload.deviceMode = deviceMode_;
+    payload.volume = volumeCurrent_;
+    payload.batteryLevel = batteryLevel_;
+    RF24NetworkHeader header(otherNode);
+    bool ok = nrfNetwork.write(header, &payload, sizeof(payload));
+    if (ok) {
+        Serial.println("Message sent");
+    } else {
+        Serial.println("Message failed");
+    }
 }
 
+
 void nrfCheck() { //TODO: if not working, print hex value
-    if (nrfLink.available()) {
-        char rxBuffer[32];
-        memset(rxBuffer, 0, sizeof(rxBuffer)); // Initialize with zeros
-    
-        // Read data into the buffer
-        nrfLink.read(&rxBuffer, sizeof(rxBuffer) - 1); // Leave space for null-terminator
-
-        char* startURL = isReadingUrl_ ? rxBuffer : strstr(rxBuffer, "UL=");
-        if (startURL != NULL) {
-            startURL += 3; // Skip "UL="
-            urlPlaceholder_ = "";
-            isReadingUrl_ = true;
+    nrfNetwork.update();
+    while (nrfNetwork.available()) {
+        RF24NetworkHeader header;
+        nrfReceivePayload_t payload;
+        nrfNetwork.read(header, &payload, sizeof(payload));
+        Serial.print(F("Received packet: url="));
+        Serial.print(payload.url);
+        Serial.print(F(", isPlaying="));
+        Serial.println(payload.isPlaying);
+        Serial.print(F(", volume="));
+        Serial.println(payload.volume);
+        Serial.print(F(", changed="));
+        Serial.println(payload.paramBitMask,BIN);
+        if (payload.paramBitMask & (1 << 0)) { // Check bit 0
+            Serial.println("URL has changed");
+            urlPlaceholder_ = String(payload.url);
+            stationChanged_ = true;
         }
-
-        if (isReadingUrl_) {
-            char* end = strstr(startURL, "=UL");
-            if (end != NULL) {
-                while (startURL != end) {
-                    if (isValidUrlChar(*startURL)) {
-                        urlPlaceholder_ += *startURL;
-                    }
-                    startURL++;
-                }
-                urlPlaceholder_.trim();
-                Serial.print("URL: ");
-                Serial.println(urlPlaceholder_);
-                isReadingUrl_ = false;
-                stationChanged_ = true;
-            } else {
-                // If we didn't find the end of the URL, append the whole buffer
-                // But ensure we're not reading past the end of rxBuffer
-                while (*startURL && startURL < rxBuffer + sizeof(rxBuffer)) {
-                    if (isValidUrlChar(*startURL)) {
-                        urlPlaceholder_ += *startURL;
-                    }
-                    startURL++;
-                }
-            }
-        }
-        String isPlaying = "";
-        char* startPS = strstr(rxBuffer, "PS=");
-        if (startPS != NULL && !isReadingUrl_) {
-            startPS += 3; // Skip "PS="
-            char* endPS = strstr(startPS, "=PS");
-            if (endPS != NULL) {
-                // Copy the playing state
-                while (startPS != endPS) {
-                    isPlaying += *startPS;
-                    startPS++;
+        if (payload.paramBitMask & (1 << 1)) { // Check bit 1
+            Serial.println("Play state has changed");
+            if (payload.isPlaying) {
+                if (deviceMode_ == A2DP){
+                    a2dp_.play();
+                } else if (deviceMode_ == RADIO) {
+                    // Start
+                    setAudioShutdown(false); // Turn on amplifier
+                    stationChangedMute_ = false; // Unmute audio
+                    stationChanged_ = true; // Raise flag for the audio task
+                    stationUpdatedFlag_ = true; // Raise flag for display update routine
+                    infoUpdatedFlag_ = true; // Raise flag for display update routine
                 }
             } else {
-                isPlaying += startPS;
-            }
-        }
-        if (isPlaying == "false") {
-            if (deviceMode_ == A2DP){
-                a2dp_.pause();
-            } else if (deviceMode_ == RADIO) {
-                // Stop
-                pAudio_->stopSong();
-                setAudioShutdown(true); // Turn off amplifier
-                stationChangedMute_ = true; // Mute audio until stream becomes stable
-            }
-        } else if (isPlaying == "true") {
-            if (deviceMode_ == A2DP){
-                a2dp_.play();
-            } else if (deviceMode_ == RADIO) {
-                // Start
-                setAudioShutdown(false); // Turn on amplifier
-                stationChangedMute_ = false; // Unmute audio
-                stationChanged_ = true; // Raise flag for the audio task
-                stationUpdatedFlag_ = true; // Raise flag for display update routine
-                infoUpdatedFlag_ = true; // Raise flag for display update routine
-            }
-        }
-        String volume = "";
-        char* startVO = strstr(rxBuffer, "VO=");
-        if (startVO != NULL && !isReadingUrl_) {
-            startVO += 3; // Skip "VO="
-            char* endVO = strstr(startVO, "=VO");
-            if (endVO != NULL) {
-                // Copy the volume
-                while (startVO != endVO) {
-                    volume += *startVO;
-                    startVO++;
+                if (deviceMode_ == A2DP){
+                    a2dp_.pause();
+                } else if (deviceMode_ == RADIO) {
+                    // Stop
+                    pAudio_->stopSong();
+                    setAudioShutdown(true); // Turn off amplifier
+                    stationChangedMute_ = true; // Mute audio until stream becomes stable
                 }
-            } else {
-                volume += startVO;
             }
         }
-        if (volume != "") {
-            int volumeParsed = volume.toInt();
-            if (volumeParsed < 0) {
-                volumeParsed = 0;
-            } else if (volumeParsed > 127) {
-                volumeParsed = 127;
-            }
+        if (payload.paramBitMask & (1 << 2)) { // Check bit 2
+            Serial.println("Volume has changed");
             if (deviceMode_ == A2DP){
-                a2dp_.set_volume(volumeParsed);
+                a2dp_.set_volume(payload.volume);
             } else if (deviceMode_ == RADIO) {
-                volumeCurrent_ = volumeParsed;
+                volumeCurrent_ = payload.volume;
                 volumeCurrentChangedFlag_ = true;
             }
         }
     }
+    
 }
+
 
 void processBatteryLevel(void){ //MARK: processBatteryLevel
   float voltage = analogRead(PIN_BATT)*3.3/4096*6;  // Reading an calculating voltage level
@@ -1170,7 +1181,7 @@ void processBatteryLevel(void){ //MARK: processBatteryLevel
 void changeDeviceMode() {
     int8_t byteToWrite = MOD_IN_ & 0x04 | (deviceMode_ & 0x03);
     Serial.print("byteToWrite: ");
-    Serial.println(byteToWrite);
+    Serial.println(byteToWrite,BIN);
     if (deviceMode_ == RADIO) {
         EEPROM.writeByte(0, byteToWrite); // Enter A2DP mode after restart
         EEPROM.commit();
@@ -1207,10 +1218,13 @@ void loop() { //MARK: loop
       handleSerialCommands();
       nrfCheck();
       readEncState();
-      if (deviceMode_ == !CHG) {
+      
+      if (deviceMode_ == RADIO || deviceMode_ == A2DP) {
         if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
             previousMillisCHG = currentMillisCHG;
+            processBatteryLevel();
             showBattery();
+            nrfTransmit();
         }
       }
       if (deviceMode_ == RADIO) {
@@ -1226,7 +1240,7 @@ void loop() { //MARK: loop
           }
           else {
               // Update the station name if flag is raised
-              if (stationUpdatedFlag_) {
+              if (stationUpdatedFlag_ && !stationChanged_) {
                   volumeNormal_ = volumeCurrent_;
                   volumeCurrent_ = 0;
                   volumeCurrentChangedFlag_ = true;
@@ -1262,12 +1276,18 @@ void loop() { //MARK: loop
       } else if (deviceMode_ == CHG) {
         if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
             previousMillisCHG = currentMillisCHG;
+            processBatteryLevel();
             showBattery();
+            nrfTransmit();
             if (batteryLevel_ < 20) {
                 digitalWrite(PIN_LED_R, !digitalRead(PIN_LED_R)); // Toggle red LED
                 digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
                 digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
-            } else if (batteryLevel_ >= 20 && batteryLevel_ < 40) {
+            } else if (batteryLevel_ == 20) {
+                digitalWrite(PIN_LED_R, LOW); // Turn on red LED
+                digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
+                digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
+            } else if (batteryLevel_ > 20 && batteryLevel_ < 40) {
                 digitalWrite(PIN_LED_R, !digitalRead(PIN_LED_R)); // Toggle red LED
                 digitalWrite(PIN_LED_G, !digitalRead(PIN_LED_G)); // Toggle green LED
                 digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
@@ -1275,6 +1295,10 @@ void loop() { //MARK: loop
                 digitalWrite(PIN_LED_B, !digitalRead(PIN_LED_B)); // Toggle blue LED
                 digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
                 digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
+            } else if (batteryLevel_ == 60) {
+                digitalWrite(PIN_LED_B, LOW); // Toggle red LED
+                digitalWrite(PIN_LED_G, HIGH); // Toggle green LED
+                digitalWrite(PIN_LED_B, HIGH);  // Make sure blue LED is off
             } else if (batteryLevel_ > 60 && batteryLevel_ <= 80) {
                 digitalWrite(PIN_LED_B, !digitalRead(PIN_LED_B)); // Toggle blue LED
                 digitalWrite(PIN_LED_R, HIGH);  // Make sure red LED is off
