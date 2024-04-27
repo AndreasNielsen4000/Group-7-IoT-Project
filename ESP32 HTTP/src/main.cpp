@@ -19,7 +19,7 @@ const char* ssid = "Rasmus iPhone";
 const char* password = "12345678";
 
 //Domain name with URL path or IP address with path
-const char* getServerName = "https://internetradioapi.azurewebsites.net/radio/play";
+const char* ServerName = "https://internetradioapi.azurewebsites.net/radio/play";
 const char* postServerName = "https://internetradioapi.azurewebsites.net/radio/battery";
 // the following variables are unsigned longs because the time, measured in
 // milliseconds, will quickly become a bigger number than can be stored in an int.
@@ -75,7 +75,7 @@ void loop() {
     if(WiFi.status()== WL_CONNECTED){
               
       // Getting data from web server
-      musicReadings = httpGETRequest(getServerName);
+      musicReadings = httpGETRequest(ServerName);
       JSONVar data = JSON.parse(musicReadings);
   
       // Checcking the format of the JSONVAR
