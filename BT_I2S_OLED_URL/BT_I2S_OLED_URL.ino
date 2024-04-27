@@ -44,43 +44,52 @@
 //AMP & PSU PINS
 #define PIN_AMP_EN 2
 #define PIN_PSU_EN 33
-#define PD_MUTE 12 //MARK: PD_MUTE - CHECK
+#define PD_MUTE 12
 
+//Power Delivery I2C Address & Frequency
 #define PD_I2C_ADR  0x28   //0101000
 #define PD_I2C_FREQ 100000 //kb/s
 
+//Timer intervals
 #define TIMER_0_INTERVAL 1000000 //Blink & Tick interval (µs)
 #define TIMER_3_INTERVAL 50000 //Power button refresh rate (µs)
 
+//PWM settings
 #define PWM_FREQ 5000 //Hz
 #define PWM_CNL_R 0 //Channel (0-16)
 #define PWM_CNL_G 1 
 #define PWM_CNL_B 3 
 #define PWM_RES 8 //Resoluion (0-16 Bit)
 
+//Encoder settings
 #define ENC_VEL 5 //Encoder velocity
-
 #define SW_THRESHOLD 300
 
 #define BTN_SINGLE_PRESS 20
 // #define BTN_LONG_PRESS 25 
 
+//Battery & Charging
 #define PIN_BATT 39
 #define PIN_CHG 36
 
+//Timer objects
 ESP32Timer Timer0(0); //4 timers are available (from 0 to 3)
 ESP32Timer Timer3(3);
 
+//Struct to hold metadata
 struct Metadata {
   char title[100];
   char artist[100];
   char album[100];
 };
 
+//Device name - used for Bluetooth
 const char* deviceName = "FrankenRadio";
 
+//Max volume, based on 7-bit volume control from Bluetooth
 const uint8_t volumeMax = 127;
 
+//Volume control variables
 static volatile char ENC_COUNT = 0;
 static volatile long tick = 0; //Seconds from power on
 static volatile bool encA = false;
@@ -93,11 +102,8 @@ void IRAM_ATTR encA_ISR();
 void IRAM_ATTR encB_ISR();
 
 //128x64 display
-
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-
-
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 //Initialize NRF
@@ -110,7 +116,7 @@ const uint16_t otherNode = 00;
 
 //TEST STATIONS:
 /** Web radio stream URLs */
-const String stationURLs[] = { //MARK: stationURLs
+const String stationURLs[] = {
     "http://streams.radiobob.de/bob-national/mp3-192/streams.radiobob.de/",
     "http://stream.rockantenne.de/rockantenne/stream/mp3",
     "http://wdr-wdr2-ruhrgebiet.icecast.wdr.de/wdr/wdr2/ruhrgebiet/mp3/128/stream.mp3",
@@ -124,6 +130,7 @@ const uint8_t numStations = sizeof(stationURLs) / sizeof(stationURLs[0]);
 
 Audio *pAudio_ = nullptr;
 TaskHandle_t pAudioTask_ = nullptr;
+
 
 Metadata metadata;
 
@@ -211,7 +218,7 @@ int8_t volumeChange_ = 0;
 
 int8_t batteryLevel_ = 0;
 
-bool display_present = false; //MARK: display_present
+bool display_present = false;
 
 // Forward declaration of the volume change callback in bluetooth sink mode
 void avrc_volume_change_callback(int vol);
@@ -219,9 +226,13 @@ void avrc_volume_change_callback(int vol);
 // Forward declaration of the connection state change callback in bluetooth sink mode
 void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*);
 
+// Forward declaration of the metadata callback in bluetooth sink mode
 void avrc_metadata_callback(uint8_t id, const uint8_t *text);
 
-bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
+/*
+* Timer0, used for blinking the LED and counting seconds from power on.
+*/
+bool IRAM_ATTR Timer0_ISR(void * timerNo){
   /*Blink */
   static bool ledToggle = 0;
   digitalWrite(PIN_LED,ledToggle);
@@ -231,6 +242,7 @@ bool IRAM_ATTR Timer0_ISR(void * timerNo){ //MARK: Timer0_ISR
   return true;
 }
 
+//inverval for charging and battery level
 unsigned long previousMillisCHG = 0;
 const long intervalCHG = 1000;
 
@@ -241,6 +253,7 @@ bool isReadingUrl_ = false;
 
 #define MAX_URL_LENGTH 141 // Define the maximum length of the URL
 
+//Struct for receiving data from nRF
 struct nrfReceivePayload_t {
     char url[MAX_URL_LENGTH];
     bool isPlaying;
@@ -248,6 +261,7 @@ struct nrfReceivePayload_t {
     uint8_t paramBitMask; // 0b00000000 <- 00 unused 0/1 url 0/1 isPlaying 0/1 volume 0/1 deviceModeChanged 00/01/10/11 deviceMode
 };
 
+//Struct for transmitting data to nRF
 struct nrfTransmitPayload_t {
     bool isPlaying;
     DeviceMode deviceMode;
@@ -255,7 +269,8 @@ struct nrfTransmitPayload_t {
     int8_t batteryLevel;
 };
 
-bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
+//Timer 3 ISR used for handling the power button and changing the device mode, contains the state machine for the device
+bool IRAM_ATTR Timer3_ISR(void * timerNo){
     /*Power logic*/ 
     bool BTN_IN = analogRead(PIN_BTN) >= SW_THRESHOLD;
     if (BTN_IN) {
@@ -304,7 +319,7 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
         }
         break;
     case CHG:
-        digitalWrite(PIN_PSU_EN,LOW); //MARK: Change to low
+        digitalWrite(PIN_PSU_EN,LOW);
         if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
             deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
             holdCounter_ = 0;
@@ -344,7 +359,8 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){ //MARK: Timer3_ISR
 }
 
 
-void IRAM_ATTR encA_ISR(){ //~7us //MARK: encA_ISR
+//Encoder interrupts for the A pin, used to detect the direction of rotation
+void IRAM_ATTR encA_ISR(){ //~7us
   detachInterrupt(digitalPinToInterrupt(PIN_ENC_A));
   encB = digitalRead(PIN_ENC_B);
   if(encB){
@@ -359,7 +375,8 @@ void IRAM_ATTR encA_ISR(){ //~7us //MARK: encA_ISR
   }
 }
 
-void IRAM_ATTR encB_ISR(){ //~7us //MARK: encB_ISR
+//Encoder interrupts for the B pin, used to detect the direction of rotation
+void IRAM_ATTR encB_ISR(){ //~7us
   detachInterrupt(digitalPinToInterrupt(PIN_ENC_B));
   encA = digitalRead(PIN_ENC_A);
   if(encA){
@@ -377,9 +394,9 @@ void IRAM_ATTR encB_ISR(){ //~7us //MARK: encB_ISR
 
 
 /**
- * Shows a welcome message at startup of the device on the TFT display.
+ * Shows a welcome message at startup of the device on the OLED display.
  */
-void showWelcomeMessage() { //MARK: showWelcomeMessage
+void showWelcomeMessage() {
     // Show some information on the startup screen
     if (display_present) {
         display.clearDisplay();
@@ -392,11 +409,11 @@ void showWelcomeMessage() { //MARK: showWelcomeMessage
 }
 
 /**
- * Displays the volume on the TFT screen.
+ * Displays the volume on the OLED screen.
  * 
- * @param volume Volume to be displayed on the TFT screen.
+ * @param volume Volume to be displayed on the OLED screen.
  */
-void showVolume(uint8_t volume) { //MARK: showVolume
+void showVolume(uint8_t volume) {
     if (display_present) {
         display.setTextSize(1);
         display.setTextColor(SH110X_WHITE,0);
@@ -407,7 +424,10 @@ void showVolume(uint8_t volume) { //MARK: showVolume
     }
 }
 
-void showBattery() { //MARK: showBattery
+/**
+ * Displays the battery level on the OLED screen.
+ */
+void showBattery() {
     if (display_present) {
         display.setCursor(65,55);
         display.print("Batt: ");
@@ -418,9 +438,9 @@ void showBattery() { //MARK: showBattery
 }
 
 /**
- * Displays the current station name contained in 'stationStr_' on the TFT screen.
+ * Displays the current station name contained in 'stationStr_' on the OLED screen as well as an indicator for bluetooth or wifi mode.
  */
-void showStation() { //MARK: showStation
+void showStation() {
    if (display_present) {
          display.clearDisplay();
         display.setTextSize(1);
@@ -459,10 +479,9 @@ void showStation() { //MARK: showStation
 }
 
 /**
- * Displays the current song information contained in 'infoStr_' on the TFT screen.
- * Each time the song info is updated, it starts scrolling from the right edge.
+ * Displays the current song information contained in 'infoStr_' on the OLED screen. As well as an indicator for bluetooth or wifi mode.
  */
-void showSongInfo() { //MARK: showSongInfo
+void showSongInfo() {
     // Update the song title if flag is raised
     if (display_present) {
         if (infoUpdatedFlag_) {
@@ -497,8 +516,10 @@ void showSongInfo() { //MARK: showSongInfo
 }
 
 
-
-void showPlayState(bool isConnected) { //MARK: showPlayState
+/*
+* Displays the current play state on the OLED screen.
+*/
+void showPlayState(bool isConnected) {
     if (display_present) {
         display.setTextSize(1);
         display.setCursor(80,0);
@@ -519,7 +540,7 @@ void showPlayState(bool isConnected) { //MARK: showPlayState
  * Connects to the specified WiFi network and starts the device in internet radio mode.
  * Audio task is started.
  */
-void startRadio() { //MARK: startRadio()
+void startRadio() {
     if (pAudio_ == nullptr) {
         if (display_present) {
             display.clearDisplay();
@@ -598,7 +619,7 @@ void startRadio() { //MARK: startRadio()
 /**
  * Stops the internet radio including the audio tasks.
  */
-void stopRadio() { //MARK: stopRadio()
+void stopRadio() {
 
     if (pAudio_ != nullptr) {
         deviceMode_ = NONE;
@@ -648,8 +669,7 @@ void stopRadio() { //MARK: stopRadio()
 /**
  * Starts the device in bluetooth sink (BT) mode.
  */
-void startA2dp() { //MARK: startA2dp
-
+void startA2dp() {
     i2s_pin_config_t pinConfig = {
         .bck_io_num = I2S_BCK_PIN,
         .ws_io_num = I2S_WS_PIN,
@@ -702,19 +722,14 @@ void startA2dp() { //MARK: startA2dp
     stationUpdatedFlag_ = true;
 
     vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-    //display.clearDisplay();
-
-    //Serial.print("End: free heap = %d, max alloc heap = %d, min free heap = %d", ESP.getFreeHeap(), ESP.getMaxAllocHeap(), ESP.getMinFreeHeap());
 }
 
 /**
- * Enable or disable the shutdown circuit of the amplifier.
- * Amplifier: M5Stack SPK hat with PAM8303.
- * - b = true  --> GPIO_0 = 0 : Shutdown enabled
- * - b = false --> GPIO_0 = 1 : Shutdown disabled
+ * Enable or disable the amplifier.
+ * - b = true  --> Amplifier turned off
+ * - b = false --> Amplifier turned on
  */
-void setAudioShutdown(bool b) { //MARK: setAudioShutdown
+void setAudioShutdown(bool b) {
     if (b) {
         digitalWrite(PIN_AMP_EN, LOW);
     }
@@ -723,7 +738,11 @@ void setAudioShutdown(bool b) { //MARK: setAudioShutdown
     }
 }
 
-void audioProcessing(void *p) { //MARK: audioProcessing
+
+/**
+ * audioProcessing task, which processes the audio stream data and controls the audio output. In case of a web radio stream, the task also handles the connection to the stream.
+ */
+void audioProcessing(void *p) {
     
     while (true) {
         if (deviceMode_ != WIFI) {
@@ -799,7 +818,10 @@ void audioProcessing(void *p) { //MARK: audioProcessing
     
 }
 
-void readEncState() { //MARK: readEncState
+/*
+* readEncState used to change volume when the encoder has been rotated.
+*/
+void readEncState() {
     
  if (volumeChange_ != 0) {
                
@@ -830,17 +852,18 @@ void readEncState() { //MARK: readEncState
     volumeChange_ = 0;
 }
 
-void setup() { //MARK: Setup
-    
+void setup() {
+    //Set and enable PSU latch
     pinMode(PIN_PSU_EN,OUTPUT);
-    //Enable PSU latch
-    digitalWrite(PIN_PSU_EN,LOW);
-    pinMode(PIN_BTN,INPUT);
-    pinMode(PIN_BATT,INPUT);
-    pinMode(PD_MUTE,OUTPUT);
-    pinMode(PIN_CHG,INPUT);
-    /*Blink setup*/
-    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_PSU_EN,HIGH);
+
+    pinMode(PIN_BTN,INPUT); //Encoder button
+    pinMode(PIN_BATT,INPUT); //Battery level
+    pinMode(PD_MUTE,OUTPUT); //Mute pin
+    pinMode(PIN_CHG,INPUT); //Charging status
+
+    pinMode(PIN_LED, OUTPUT); // Onboard LED
+
     Timer0.attachInterruptInterval(TIMER_0_INTERVAL, Timer0_ISR);
 
     /*Encoder Interrupt setup*/
@@ -849,18 +872,20 @@ void setup() { //MARK: Setup
     attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encA_ISR, RISING);
     
     delay(1);
-    pinMode(PIN_AMP_EN, OUTPUT);
+    pinMode(PIN_AMP_EN, OUTPUT); // Amplifier setup
+    digitalWrite(PIN_AMP_EN,LOW);
 
-    pinMode(PIN_LED_R, OUTPUT);
-    pinMode(PIN_LED_G, OUTPUT);
+    pinMode(PIN_LED_R, OUTPUT); // RGB LED
+    pinMode(PIN_LED_G, OUTPUT); 
     pinMode(PIN_LED_B, OUTPUT);
     digitalWrite(PIN_LED_R,HIGH);
     digitalWrite(PIN_LED_G,HIGH);
     digitalWrite(PIN_LED_B,HIGH);
-    digitalWrite(PIN_AMP_EN,LOW);
+    
 
     Serial.begin(115200);
 
+    // If the OLED display is present, we can use it to show some information
     if(!display.begin(0x3C,true)) { // Address 0x3C for 128x32
         Serial.println(F("Adafruit SH1106G allocation failed"));
         display_present = false;
@@ -868,17 +893,21 @@ void setup() { //MARK: Setup
         display_present = true;
     }
 
+    // load the mode from EEPROM
     if ( EEPROM.begin(1) ) {
         //uint8_t mode = EEPROM.readByte(0);
         MOD_IN_ = EEPROM.readByte(0);
         Serial.print("EEPROM.readByte(0) = ");
         Serial.println(MOD_IN_,BIN);
-        //Serial.print("EEPROM.readByte(0) = %d", mode);
+
+        // Set the timer to check the power button
         Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
-        //MARK: TIMER3
+        
+        // Set the device mode according to the EEPROM value
         deviceMode_ = static_cast<t_DeviceMode>(MOD_IN_ & 0x03);
         Serial.println(deviceMode_);
-        // enum DeviceMode {WIFI = 0, BT = 1, CHG = 2, NONE = 3};
+        
+        // Display the welcome message based on the device mode
         if (deviceMode_ == BT) {
             if (display_present) {
                 display.clearDisplay();
@@ -888,8 +917,8 @@ void setup() { //MARK: Setup
                 display.print("Bluetooth");
                 display.display();
             }
-            digitalWrite(PD_MUTE,HIGH); //MARK: UNMUTE
-            startA2dp();
+            digitalWrite(PD_MUTE,HIGH); //unmute
+            startA2dp(); // Start bluetooth
         }
         else if (deviceMode_ == WIFI) {
             if (display_present) {
@@ -900,8 +929,8 @@ void setup() { //MARK: Setup
                 display.print("WiFi Radio");
                 display.display();
             }
-            digitalWrite(PD_MUTE,HIGH); //MARK: UNMUTE
-            startRadio();
+            digitalWrite(PD_MUTE,HIGH); //unmute
+            startRadio(); // Start the internet radio
         } else if (deviceMode_ == CHG) {
             if (display_present) {
                 display.clearDisplay();
@@ -911,7 +940,6 @@ void setup() { //MARK: Setup
                 display.print("Charging");
                 display.display();    
             }
-            showBattery();
         } else if (deviceMode_ == NONE) {
             if (display_present) {
                 display.clearDisplay();
@@ -923,12 +951,13 @@ void setup() { //MARK: Setup
             }
         }
     } else {
-        //log_w("EEPROM.begin() returned 'false'!");
-        Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
+        Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR); // Set the timer to check the power button
     }
     delay(1000);
-    pinMode(PIN_AMP_EN,OUTPUT);
+    pinMode(PIN_AMP_EN,OUTPUT); // Amplifier setup again because it may fail after setting up wifi/internet radio
     digitalWrite(PIN_AMP_EN,LOW);
+
+    //Set the RGB LED to display the current mode
     if (deviceMode_ == WIFI) {
         digitalWrite(PIN_LED_G,LOW);
     } else if (deviceMode_ == BT) {
@@ -940,6 +969,7 @@ void setup() { //MARK: Setup
         digitalWrite(PIN_LED_G,HIGH);
         digitalWrite(PIN_LED_B,HIGH);
     }
+
     //Setup NRF
     if (!nrfLink.begin()) {
         Serial.println("Failed to communicate with nRF24L01");
@@ -1056,7 +1086,10 @@ void handleSerialCommands() { //MARK: handleSerialCommands
     }
 }        
 
-void nrfTransmit() { //MARK: nrfTransmit
+/*
+* Transmit the current state of the device to the nRFLink for back-end control
+*/
+void nrfTransmit() { 
     bool playstate = false;
     if (deviceMode_ == BT) {
         playstate = a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED;
@@ -1079,8 +1112,10 @@ void nrfTransmit() { //MARK: nrfTransmit
     }
 }
 
-
-void nrfCheck() { //TODO: if not working, print hex value
+/*
+* Check for incoming messages from the nRFLink for back-end control
+*/
+void nrfCheck() {
     nrfNetwork.update();
     while (nrfNetwork.available()) {
         RF24NetworkHeader header;
@@ -1136,13 +1171,18 @@ void nrfCheck() { //TODO: if not working, print hex value
     
 }
 
-
-void processBatteryLevel(void){ //MARK: processBatteryLevel
+/*
+* Process the battery level and convert it to a percentage
+*/
+void processBatteryLevel(void){
   float voltage = analogRead(PIN_BATT)*3.3/4096*6;  // Reading an calculating voltage level
   int8_t percent = (voltage/12.4)*100;              // Converting to percent
   batteryLevel_ = percent;
 }
 
+/*
+* Change the device mode and restart the device
+*/
 void changeDeviceMode() {
     int8_t byteToWrite = MOD_IN_ & 0x04 | (deviceMode_ & 0x03);
     Serial.print("byteToWrite: ");
@@ -1172,17 +1212,18 @@ void changeDeviceMode() {
     }
 }
 
-void loop() { //MARK: loop
+void loop() { 
     
-
+    //If device mode changed flag, change the device mode
     if (deviceModeChanged_) {
         changeDeviceMode();
         deviceModeChanged_ = false;
     } else {
       unsigned long currentMillisCHG = millis();
-      nrfCheck();
-      readEncState();
+      nrfCheck(); // Check for incoming messages from the nRFLink
+      readEncState(); // Read the encoder state
       
+      //Update and show battery level and transmit the current state to the nRFLink every intervalCHG milliseconds
       if (deviceMode_ == WIFI || deviceMode_ == BT) {
         if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
             previousMillisCHG = currentMillisCHG;
@@ -1191,15 +1232,16 @@ void loop() { //MARK: loop
             nrfTransmit();
         }
       }
+
       if (deviceMode_ == WIFI) {
           if (volumeCurrentChangedFlag_) {
-            showVolume(volumeCurrent_);
+            showVolume(volumeCurrent_); // Show the updated volume on the OLED screen
           }
           if (connectionError_) {
               showVolume(volumeCurrent_);
               display.setCursor(0,30);
-              display.println("Stream unavailable");
-              digitalWrite(PIN_AMP_EN,LOW); //MARK: DISABLE AMP NO STREAM
+              display.println("Stream unavailable"); // Show error message on the OLED screen
+              digitalWrite(PIN_AMP_EN,LOW); //Turn off amplifier
               vTaskDelay(200 / portTICK_PERIOD_MS); // Wait until next cycle
           }
           else {
@@ -1211,7 +1253,7 @@ void loop() { //MARK: loop
                   showVolume(volumeCurrent_);
                   showStation();
                   stationUpdatedFlag_ = false; // Clear update flag  
-                  digitalWrite(PIN_AMP_EN,HIGH); //MARK: ENABLE AMP NEW STATION
+                  digitalWrite(PIN_AMP_EN,HIGH); //Enable amplifier
                   while (volumeCurrent_ < volumeNormal_){
                     volumeCurrentF_ += 0.25;
                     volumeCurrent_ = (uint8_t) volumeCurrentF_;
@@ -1219,7 +1261,7 @@ void loop() { //MARK: loop
                     showVolume(volumeCurrent_);
                   }
               }
-              showSongInfo();
+              showSongInfo(); // Show the song information on the OLED screen
               vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
           }
       } else if (deviceMode_ == BT) {
@@ -1229,20 +1271,22 @@ void loop() { //MARK: loop
                   stationUpdatedFlag_ = false; // Clear update flag
               }
 
-              showSongInfo();
+              showSongInfo(); // Show the song information on the OLED screen
 
               if (volumeCurrentChangedFlag_) {
-                  showVolume(volumeCurrent_);
+                  showVolume(volumeCurrent_); // Show the updated volume on the OLED screen
               } 
               
-              showPlayState(a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED);
+              showPlayState(a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED); // Show the play state on the OLED screen
               vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
       } else if (deviceMode_ == CHG) {
         if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
             previousMillisCHG = currentMillisCHG;
+            //Update and show battery level and transmit the current state to the nRFLink every intervalCHG milliseconds
             processBatteryLevel();
             showBattery();
             nrfTransmit();
+            //Use the RGB LED to show 5 different battery levels (0-20, 20-40, 40-60, 60-80, 80-100), added the 20 and 60 levels to control the toggling of the LEDs
             if (batteryLevel_ < 20) {
                 digitalWrite(PIN_LED_R, !digitalRead(PIN_LED_R)); // Toggle red LED
                 digitalWrite(PIN_LED_G, HIGH);  // Make sure green LED is off
@@ -1283,23 +1327,23 @@ void loop() { //MARK: loop
 }
 
 
-//MARK: optional functions
-void audio_info(const char *info){ //MARK: audio_info
+//mainly optional callbacks for the audio library, left in for future use
+void audio_info(const char *info){ 
     //Serial.print("info        "); Serial.println(info);
 }
-void audio_id3data(const char *info){  //id3 metadata //MARK: audio_id3data
+void audio_id3data(const char *info){  //id3 metadata 
     // Serial.print("id3data     ");Serial.println(info);
 }
-void audio_eof_mp3(const char *info){  //end of file //MARK: audio_eof_mp3
+void audio_eof_mp3(const char *info){  //end of file 
     // Serial.print("eof_mp3     ");Serial.println(info);
 }
-void audio_showstation(const char *info){ //MARK: audio_showstation
+void audio_showstation(const char *info){ 
     stationStr_ = info;
     stationUpdatedFlag_ = true; // Raise flag for the display update routine
 
     // Serial.print("station     ");Serial.println(info);
 }
-void audio_showstreamtitle(const char *info){ //MARK: audio_showstreamtitle
+void audio_showstreamtitle(const char *info){ 
     if (deviceMode_ == WIFI) {
         infoStr_ = info;
     }
@@ -1313,23 +1357,26 @@ void audio_showstreamtitle(const char *info){ //MARK: audio_showstreamtitle
 
     // Serial.print("streamtitle ");Serial.println(info);
 }
-void audio_bitrate(const char *info){ //MARK: audio_bitrate
+void audio_bitrate(const char *info){ 
     // Serial.print("bitrate     ");Serial.println(info);
 }
 void audio_commercial(const char *info){  //duration in sec //audio_commercial
     // Serial.print("commercial  ");Serial.println(info);
 }
-void audio_icyurl(const char *info){  //homepage //MARK: audio_icyurl
+void audio_icyurl(const char *info){  //homepage 
     // Serial.print("icyurl      ");Serial.println(info);
 }
-void audio_lasthost(const char *info){  //stream URL played //MARK: audio_lasthost
+void audio_lasthost(const char *info){  //stream URL played 
     // Serial.print("lasthost    ");Serial.println(info);
 }
-void audio_eof_speech(const char *info){ //MARK: audio_eof_speech
+void audio_eof_speech(const char *info){ 
     // Serial.print("eof_speech  ");Serial.println(info);
 }
 
-void avrc_metadata_callback(uint8_t id, const uint8_t *text) { //MARK: avrc_metadata_callback
+/*
+* metadata callback for the bluetooth audio library
+*/
+void avrc_metadata_callback(uint8_t id, const uint8_t *text) { 
     switch (id) {
         case ESP_AVRC_MD_ATTR_TITLE:
             titleStr_ = (char*) text;
@@ -1356,7 +1403,10 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) { //MARK: avrc_meta
     // Serial.printf("==> AVRC metadata rsp: attribute id 0x%x, %s\n", id, text);
 }
 
-void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) { //MARK: a2dp_connection_state_changed
+/*
+* connection state callback for the bluetooth audio library
+*/
+void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) {
 
     //Serial.print("Connection state: %d", state);
 
@@ -1366,7 +1416,10 @@ void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) { //
     }
 }
 
-void avrc_volume_change_callback(int vol) { //MARK: avrc_volume_change_callback
+/*
+* volume change callback
+*/
+void avrc_volume_change_callback(int vol) {
     volumeCurrent_ = vol;
     volumeCurrentChangedFlag_ = true;
 }
