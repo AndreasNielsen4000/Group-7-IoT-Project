@@ -36,7 +36,7 @@ enum WiFiState {
 WiFiState wifiState = DISCONNECTED;
 unsigned long wifiConnectStart;
 
-enum DeviceMode {RADIO = 0, A2DP = 1, CHG = 2, NONE = 3};
+enum DeviceMode {WIFI = 0, BT = 1, CHG = 2, NONE = 3};
 
 typedef enum DeviceMode t_DeviceMode;
 
