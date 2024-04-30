@@ -13,7 +13,7 @@
 #include <HTTPClient.h>
 #include <Arduino_JSON.h>
 #include <RF24.h>
-#include <nRF24L01.h>
+// #include <nRF24L01.h>
 #include "WifiCredentials.h"
 #include <RF24Network.h>
 
@@ -60,11 +60,14 @@ String oldVolumeString;
 String urlString;
 String isPlayingString;
 String volumeString;
+String oldDeviceModeString;
+String deviceModeString;
 
 
 const char* RadioURL;
 const char* RadioIsPlaying;
 const char* RadioVolume;
+const char* RadioDeviceMode;
 
 // Protoype functions
 String httpGETRequest(const char* serverName);
@@ -90,12 +93,12 @@ struct nrfReceivePayload_t
   uint8_t batterylevel;
 };
 
+//JSON object = [{"url":"","name":"","isPlaying":"false","deviceisPlaying":"false","volume":"20","deviceVolume":"0","batteryLevel":"","deviceMode":"","deviceDeviceMode":"2"}]
 
 void setup() {
   Serial.begin(115200);
   
   connectToWiFi();
-
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
   
   // Setting up nRF radio
@@ -112,7 +115,7 @@ void loop() {
   if (postWebData != "") {
     if (millis() - lastPostTime >= 5000) { // 5 seconds have passed since the last post
       // Send data to web server every 5 seconds
-      if (wifiState == CONNECTED) {
+      if (WiFi.status() == WL_CONNECTED) {
         httpPostRequest(ServerName, postWebData);
         lastPostTime = millis();
         delay(1000); // Delay of 1 second to allow the server to process the data 
@@ -125,7 +128,7 @@ void loop() {
   if ((millis() - lastTime) > timerDelay) {
     
     //Check WiFi connection status
-    if (wifiState == CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED) {
               
       // Getting data from web server
       serverReadings = httpGETRequest(ServerName);
@@ -144,15 +147,18 @@ void loop() {
       RadioURL = serverReadingsJSON[0]["url"];
       RadioIsPlaying = serverReadingsJSON[0]["isPlaying"];
       RadioVolume = serverReadingsJSON[0]["volume"];
+      RadioDeviceMode = serverReadingsJSON[0]["deviceMode"];
 
       Serial.println("Extracted data from JSON object");
       Serial.println(RadioURL);
       Serial.println(RadioIsPlaying);
       Serial.println(RadioVolume);
+      Serial.println(RadioDeviceMode);
 
       urlString = String(RadioURL);
       isPlayingString =  String(RadioIsPlaying);
       volumeString = String(RadioVolume);
+      deviceModeString = String(RadioDeviceMode);
 
       Serial.print("RadioURL: ");
       Serial.println(urlString);
@@ -160,8 +166,10 @@ void loop() {
       Serial.println(isPlayingString);
       Serial.print("RadioVolume: ");
       Serial.println(volumeString);
+      Serial.print("RadioDeviceMode: ");
+      Serial.println(deviceModeString);
 
-      if (urlString != oldUrlString || isPlayingString != oldIsPlayingString || volumeString != oldVolumeString) {
+      if (urlString != oldUrlString || isPlayingString != oldIsPlayingString || volumeString != oldVolumeString || deviceModeString != oldDeviceModeString) {
         uint8_t paramBitMask = 0; // Create a bitmask to keep track of which parameters have changed
         if (urlString != oldUrlString) {
             paramBitMask |= 1 << 0; // Set bit 0
@@ -176,12 +184,15 @@ void loop() {
         oldUrlString = urlString;
         oldIsPlayingString = isPlayingString;
         oldVolumeString = volumeString;
+        oldDeviceModeString = deviceModeString;
         Serial.print("RadioURL: ");
         Serial.println(oldUrlString);
         Serial.print("RadioIsPlaying: ");
         Serial.println(oldIsPlayingString);
         Serial.print("RadioVolume: ");
         Serial.println(oldVolumeString);
+        Serial.print("RadioDeviceMode: ");
+        Serial.println(oldDeviceModeString);
         Serial.print("ParamBitMask: ");
         Serial.println(paramBitMask, BIN);
 
@@ -195,6 +206,18 @@ void loop() {
         // Convert oldVolumeString to int
         int oldVolumeInt = oldVolumeString.toInt();
 
+        // Convert oldDeviceModeString into paramBitMask with most the two significant bits
+        // We can recieve WiFi, Bluetooth, Charging or Standby
+        if (oldDeviceModeString == "WiFi") {
+          paramBitMask |= 0b00 << 6;
+        } else if (oldDeviceModeString == "Bluetooth") {
+          paramBitMask |= 0b01 << 6;
+        } else if (oldDeviceModeString == "Charge") {
+          paramBitMask |= 0b10 << 6;
+        } else if (oldDeviceModeString == "Standby") {
+          paramBitMask |= 0b11 << 6;
+        }
+        
         nrfTransmitPayload_t payload;
         strncpy(payload.url, oldUrlChar, MAX_URL_LENGTH); // copy oldUrlChar to payload.url
         payload.isPlaying = oldIsPlayingBool;
@@ -238,6 +261,7 @@ String httpGETRequest(const char* serverName) {
     Serial.println(httpResponseCode);
   }
   // Free resources
+  delay(100);
   httpGet.end();
   delay(100); // Delay of 100ms
 
@@ -267,41 +291,42 @@ void httpPostRequest(const char* serverName, String payload){
     }
 
     // Free resources
+    delay(100);
     httpPost.end();
     delay(100); // Delay of 100ms
 }
 
-void connectToWiFi(void){
+void connectToWiFi() {
+  static unsigned long lastAttemptTime = 0;
+  long reconnectInterval = 10000;  // Time interval to attempt reconnection (10 seconds)
+  uint8_t status = WiFi.waitForConnectResult();
   switch (wifiState) {
     case DISCONNECTED:
-      WiFi.begin(WifiCredentials::SSID, WifiCredentials::PASSWORD);
-      Serial.println("Connecting to WiFi");
-      wifiConnectStart = millis();
-      wifiState = CONNECTING;
+      if (millis() - lastAttemptTime > reconnectInterval) {
+        WiFi.begin(WifiCredentials::SSID, WifiCredentials::PASSWORD);
+        Serial.println("Connecting to WiFi...");
+        wifiConnectStart = millis();
+        wifiState = CONNECTING;
+        lastAttemptTime = millis();
+      }
       break;
 
     case CONNECTING:
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("");
-        Serial.print("Connected to WiFi network with IP Address: ");
-        Serial.println(WiFi.localIP());
+      if (status == WL_CONNECTED) {
+        Serial.println("Connected to WiFi network with IP Address: " + WiFi.localIP().toString());
         wifiState = CONNECTED;
-        delay(500);
-      } else if (millis() - wifiConnectStart > 5000) { // Try to connect for 5 seconds
-        Serial.println("Failed to connect to WiFi");
+      } else if (millis() - wifiConnectStart > 10000) { // Failed after 10 seconds
+        Serial.println("Failed to connect to WiFi. Attempting again...");
         wifiState = DISCONNECTED;
       }
       break;
 
     case CONNECTED:
-      if (WiFi.status() != WL_CONNECTED) {
-        wifiState = DISCONNECTING;
+      if (status != WL_CONNECTED) {
+        Serial.println("WiFi Disconnected. Attempting to reconnect...");
+        WiFi.disconnect();
+        wifiState = DISCONNECTED;
       }
-      break;
-
-    case DISCONNECTING:
-      Serial.println("WiFi Disconnected. Attempting to Reconnect...");
-      wifiState = DISCONNECTED;
       break;
 
     default:
@@ -309,14 +334,25 @@ void connectToWiFi(void){
   }
 }
 
+
+String deviceModeToString(DeviceMode deviceMode) {
+  switch(deviceMode) {
+    case WIFI: return "WiFi";
+    case BT: return "Bluetooth";
+    case CHG: return "Charge";
+    case NONE: return "Standby";
+    default: return "Unknown";
+  }
+}
+
 String postDataString(bool isPlaying, DeviceMode deviceMode, int8_t volume, uint8_t batterylevel) {
   String data = "{\"deviceisPlaying\":\"";
   data += isPlaying ? "true" : "false";
   data += "\",\"deviceDeviceMode\":\"";
-  data += deviceMode;
+  data += deviceModeToString(deviceMode);
   data += "\",\"deviceVolume\":\"";
   data += volume;
-  data += "\",\"deviceBatteryLevel\":\"";
+  data += "\",\"batteryLevel\":\"";
   data += batterylevel;
   data += "\"}";
   return data;
