@@ -66,7 +66,7 @@
 #define SW_THRESHOLD 300
 
 #define BTN_SINGLE_PRESS 20
-// #define BTN_LONG_PRESS 25 
+#define BTN_LONG_PRESS 100
 
 //Battery & Charging
 #define PIN_BATT 39
@@ -141,7 +141,7 @@ Metadata metadata;
 BluetoothA2DPSink a2dp_;
 
 // Enumeration with possible device modes
-enum DeviceMode {WIFI = 0, BT = 1, CHG = 2, NONE = 3};
+enum DeviceMode {WIFI = 0, BT = 1, CHG = 2, NONE = 3, BOOT = 4};
 
 typedef enum DeviceMode t_DeviceMode;
 
@@ -243,8 +243,8 @@ bool IRAM_ATTR Timer0_ISR(void * timerNo){
 }
 
 //inverval for charging and battery level
-unsigned long previousMillisCHG = 0;
-const long intervalCHG = 1000;
+unsigned long previousMillisLoop = 0;
+const long intervalLoop = 1000;
 
 //nRFLink receive variables
 String url_ = "";
@@ -268,6 +268,17 @@ struct nrfTransmitPayload_t {
     int8_t volume;
     int8_t batteryLevel;
 };
+
+// Struct for holding the previous state
+struct PrevState {
+    t_DeviceMode deviceMode;
+    bool playState;
+    int volume;
+    int batteryLevel;
+};
+
+// Initialize the previous state
+PrevState prevState = {BOOT, false, -1, -1};
 
 //Timer 3 ISR used for handling the power button and changing the device mode, contains the state machine for the device
 bool IRAM_ATTR Timer3_ISR(void * timerNo){
@@ -319,7 +330,6 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){
         }
         break;
     case CHG:
-        digitalWrite(PIN_PSU_EN,LOW);
         if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
             deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
             holdCounter_ = 0;
@@ -329,20 +339,28 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){
           holdCounter_ = 0;
         }
         if (digitalRead(PIN_CHG)) {
+            digitalWrite(PIN_PSU_EN,HIGH);
             deviceMode_ = NONE;
             MOD_IN_ = (deviceMode_ & 0x07); 
             holdCounter_ = 0;
             deviceModeChanged_ = true;
+        } else {
+        digitalWrite(PIN_PSU_EN,LOW);
         }
         break;
     case NONE:
+        if (holdCounter_ > BTN_LONG_PRESS && BTN_IN) {
+          digitalWrite(PIN_PSU_EN,LOW);
+        } else {
         digitalWrite(PIN_PSU_EN,HIGH);
+        }
         if (!BTN_IN && holdCounter_ > 1 && holdCounter_ < BTN_SINGLE_PRESS) {
             deviceMode_ = static_cast<t_DeviceMode>((MOD_IN_ >> 2) & 0x03);
             holdCounter_ = 0;
             deviceModeChanged_ = true;
         }
-        if (holdCounter_ > BTN_SINGLE_PRESS) {
+        
+        if (!BTN_IN && holdCounter_ < BTN_LONG_PRESS) {
           holdCounter_ = 0;
         }
         if (!digitalRead(PIN_CHG)) {
@@ -1098,17 +1116,28 @@ void nrfTransmit() {
     } else {
         playstate = false;
     }
-    nrfTransmitPayload_t payload;
-    payload.isPlaying = playstate;
-    payload.deviceMode = deviceMode_;
-    payload.volume = volumeCurrent_;
-    payload.batteryLevel = batteryLevel_;
-    RF24NetworkHeader header(otherNode);
-    bool ok = nrfNetwork.write(header, &payload, sizeof(payload));
-    if (ok) {
-        Serial.println("Message sent");
-    } else {
-        Serial.println("Message failed");
+
+    // Only transmit if a state has changed
+    if (playstate != prevState.playState || deviceMode_ != prevState.deviceMode || volumeCurrent_ != prevState.volume || batteryLevel_ != prevState.batteryLevel) {
+        nrfTransmitPayload_t payload;
+        payload.isPlaying = playstate;
+        payload.deviceMode = deviceMode_;
+        payload.volume = volumeCurrent_;
+        payload.batteryLevel = batteryLevel_;
+        RF24NetworkHeader header(otherNode);
+        bool ok = nrfNetwork.write(header, &payload, sizeof(payload));
+        if (ok) {
+            Serial.println("Message sent");
+            // Update the previous state
+            prevState.playState = playstate;
+            prevState.deviceMode = deviceMode_;
+            prevState.volume = volumeCurrent_;
+            prevState.batteryLevel = batteryLevel_;
+        } else {
+            Serial.println("Message failed");
+        }
+
+
     }
 }
 
@@ -1118,6 +1147,7 @@ void nrfTransmit() {
 void nrfCheck() {
     nrfNetwork.update();
     while (nrfNetwork.available()) {
+        Serial.println("Received package!");
         RF24NetworkHeader header;
         nrfReceivePayload_t payload;
         nrfNetwork.read(header, &payload, sizeof(payload));
@@ -1160,12 +1190,39 @@ void nrfCheck() {
         }
         if (payload.paramBitMask & (1 << 2)) { // Check bit 2
             Serial.println("Volume has changed");
+            volumeCurrent_ = payload.volume;
             if (deviceMode_ == BT){
-                a2dp_.set_volume(payload.volume);
+                a2dp_.set_volume(volumeCurrent_); 
+                showVolume(volumeCurrent_);
             } else if (deviceMode_ == WIFI) {
-                volumeCurrent_ = payload.volume;
                 volumeCurrentChangedFlag_ = true;
             }
+        }
+        // Extract the device mode from the paramBitMask
+        uint8_t deviceModeMask = (payload.paramBitMask >> 6) & 0b11; // Shift right 6 bits and mask with 0b11 to get the last two bits
+        t_DeviceMode newDeviceMode;
+        switch (deviceModeMask) {
+            case 0b00:
+                newDeviceMode = WIFI;
+                break;
+            case 0b01:
+                newDeviceMode = BT;
+                break;
+            case 0b10:
+                newDeviceMode = CHG;
+                break;
+            case 0b11:
+                newDeviceMode = NONE;
+                break;
+        }
+
+        // Compare the new device mode with the current one
+        if (newDeviceMode != deviceMode_) {
+            // Update the device mode
+            deviceMode_ = newDeviceMode;
+            Serial.print("Device mode has changed to ");
+            Serial.println(deviceMode_);
+            deviceModeChanged_ = true;
         }
     }
     
@@ -1216,17 +1273,18 @@ void loop() {
     
     //If device mode changed flag, change the device mode
     if (deviceModeChanged_) {
+        nrfTransmit();
         changeDeviceMode();
         deviceModeChanged_ = false;
     } else {
-      unsigned long currentMillisCHG = millis();
+      unsigned long currentMillisLoop = millis();
       nrfCheck(); // Check for incoming messages from the nRFLink
       readEncState(); // Read the encoder state
       
-      //Update and show battery level and transmit the current state to the nRFLink every intervalCHG milliseconds
+      //Update and show battery level and transmit the current state to the nRFLink every intervalLoop milliseconds
       if (deviceMode_ == WIFI || deviceMode_ == BT) {
-        if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
-            previousMillisCHG = currentMillisCHG;
+        if (currentMillisLoop - previousMillisLoop >= intervalLoop) {
+            previousMillisLoop = currentMillisLoop;
             processBatteryLevel();
             showBattery();
             nrfTransmit();
@@ -1280,9 +1338,9 @@ void loop() {
               showPlayState(a2dp_.get_audio_state() == ESP_A2D_AUDIO_STATE_STARTED); // Show the play state on the OLED screen
               vTaskDelay(20 / portTICK_PERIOD_MS); // Wait until next cycle
       } else if (deviceMode_ == CHG) {
-        if (currentMillisCHG - previousMillisCHG >= intervalCHG) {
-            previousMillisCHG = currentMillisCHG;
-            //Update and show battery level and transmit the current state to the nRFLink every intervalCHG milliseconds
+        if (currentMillisLoop - previousMillisLoop >= intervalLoop) {
+            previousMillisLoop = currentMillisLoop;
+            //Update and show battery level and transmit the current state to the nRFLink every intervalLoop milliseconds
             processBatteryLevel();
             showBattery();
             nrfTransmit();
@@ -1320,7 +1378,12 @@ void loop() {
         }
       } else if (deviceMode_ == NONE) {
         // Neither WIFI, BT or CHG
-        vTaskDelay(200 / portTICK_PERIOD_MS);
+        if (currentMillisLoop - previousMillisLoop >= intervalLoop) {
+          previousMillisLoop = currentMillisLoop;
+          processBatteryLevel();
+          showBattery();
+          nrfTransmit();
+        }
       }
       
     }
