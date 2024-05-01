@@ -11,6 +11,7 @@
 #include <RF24.h>
 #include <RF24Network.h>
 
+//#define DEBUG //Uncomment to enable debug messages
 
 //NRF PINS
 #define PIN_NRF_CE 17
@@ -106,7 +107,8 @@ void IRAM_ATTR encB_ISR();
 #define SCREEN_HEIGHT 64
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-//Initialize NRF
+//Initialize NRF Network
+//#define MAX_PAYLOAD_SIZE   144 //Change this value to allow larger payloads for nRFNetwork 
 RF24 nrfLink(PIN_NRF_CE, PIN_NRF_CSN);
 int8_t channel = 0x76;
 RF24Network nrfNetwork(nrfLink);
@@ -488,10 +490,14 @@ void showStation() {
         }
         display.display();
     } else {
-        Serial.print("Station: ");
-        Serial.println(stationStr_);
+        #ifdef DEBUG
+            Serial.print("Station: ");
+            Serial.println(stationStr_);
+        #endif
         if (connectionError_) {
-            Serial.println("Connection error");
+            #ifdef DEBUG
+                Serial.println("Connection error");
+            #endif
         }
     }
 }
@@ -574,24 +580,30 @@ void startRadio() {
             display.print(WifiCredentials::SSID);
             display.display();
         }
-        Serial.println("MAC: ");
-        Serial.print(WiFi.macAddress().c_str());
-        Serial.println("Connecting to:");
-        Serial.println(WifiCredentials::SSID);
+        #ifdef DEBUG
+            Serial.println("MAC: ");
+            Serial.print(WiFi.macAddress().c_str());
+            Serial.println("Connecting to:");
+            Serial.println(WifiCredentials::SSID);
+        #endif
         
 
         // Initialize WiFi and connect to network
         WiFi.mode(WIFI_STA);
         WiFi.setHostname(deviceName);
         WiFi.begin(WifiCredentials::SSID, WifiCredentials::PASSWORD);
-        Serial.print("WiFi Connecting");
+        #ifdef DEBUG
+            Serial.print("WiFi Connecting");
+        #endif
         while (!WiFi.isConnected()) {
             if (deviceModeChanged_) {
                 changeDeviceMode();
                 deviceModeChanged_ = false;
             }
             delay(100);
-            Serial.print(".");
+            #ifdef DEBUG
+                Serial.print(".");
+            #endif
         }
 
         // Display own IP address after connecting
@@ -607,8 +619,10 @@ void startRadio() {
             display.print(WiFi.localIP().toString().c_str());
             display.display();
         }
-        Serial.print("\nIP:");
-        Serial.println(WiFi.localIP().toString().c_str());
+        #ifdef DEBUG
+            Serial.print("\nIP:");
+            Serial.println(WiFi.localIP().toString().c_str());
+        #endif
 
         pAudio_ = new Audio(false); // Use external DAC
 
@@ -629,9 +643,6 @@ void startRadio() {
         }
         isPlaying_ = true;
     }
-    else {
-        log_w("'pAudio_' not cleaned up!");
-    }
 }
 
 /**
@@ -646,9 +657,6 @@ void stopRadio() {
         if (pAudioTask_ != nullptr) {
             vTaskDelete(pAudioTask_);
             pAudioTask_ = nullptr;
-        }
-        else {
-            log_w("Cannot clean up 'pAudioTask_'!");
         }
 
         pAudio_->stopSong();
@@ -677,9 +685,6 @@ void stopRadio() {
           display.clearDisplay();
         }
         
-    }
-    else {
-        log_w("Cannot clean up 'pAudio_'!");
     }
     isPlaying_ = false;
 }
@@ -721,7 +726,9 @@ void startA2dp() {
             display.print("Bluetooth enabled");
             display.display();
         }
-        Serial.println("Bluetooth enabled");
+        #ifdef DEBUG
+            Serial.println("Bluetooth enabled");
+        #endif
     }
     else {
         if (display_present) {
@@ -733,7 +740,9 @@ void startA2dp() {
             display.println(btStatus);
             display.display();
         }
-        Serial.print("Bluetooth not enabled: ");
+        #ifdef DEBUG
+            Serial.print("Bluetooth not enabled: ");
+        #endif
     }
 
     stationStr_ = "Bluetooth";
@@ -819,7 +828,6 @@ void audioProcessing(void *p) {
                 // If the stream does not build up within a few seconds something is wrong with the connection
                 if ( millis() - timeConnect_ > 3000 ) {
                     if (!connectionError_) {
-                        //Serial.printf("Audio buffer low: %u of %u bytes.\n", audioBufferFilled_, audioBufferSize_);
                         connectionError_ = true; // Raise connection error flag
                     }
                 }
@@ -901,11 +909,15 @@ void setup() {
     digitalWrite(PIN_LED_B,HIGH);
     
 
-    Serial.begin(115200);
+    #ifdef DEBUG
+        Serial.begin(115200);
+    #endif
 
     // If the OLED display is present, we can use it to show some information
     if(!display.begin(0x3C,true)) { // Address 0x3C for 128x32
-        Serial.println(F("Adafruit SH1106G allocation failed"));
+        #ifdef DEBUG
+            Serial.println(F("Adafruit SH1106G allocation failed"));
+        #endif
         display_present = false;
     } else {
         display_present = true;
@@ -915,15 +927,18 @@ void setup() {
     if ( EEPROM.begin(1) ) {
         //uint8_t mode = EEPROM.readByte(0);
         MOD_IN_ = EEPROM.readByte(0);
-        Serial.print("EEPROM.readByte(0) = ");
-        Serial.println(MOD_IN_,BIN);
-
+        #ifdef DEBUG
+            Serial.print("EEPROM.readByte(0) = ");
+            Serial.println(MOD_IN_,BIN);
+        #endif
         // Set the timer to check the power button
         Timer3.attachInterruptInterval(TIMER_3_INTERVAL, Timer3_ISR);
         
         // Set the device mode according to the EEPROM value
         deviceMode_ = static_cast<t_DeviceMode>(MOD_IN_ & 0x03);
-        Serial.println(deviceMode_);
+        #ifdef DEBUG
+            Serial.println(deviceMode_);
+        #endif
         
         // Display the welcome message based on the device mode
         if (deviceMode_ == BT) {
@@ -990,13 +1005,19 @@ void setup() {
 
     //Setup NRF
     if (!nrfLink.begin()) {
-        Serial.println("Failed to communicate with nRF24L01");
-        for (int i = 0; i < 3; i++) {
+        #ifdef DEBUG
             Serial.println("Failed to communicate with nRF24L01");
+        #endif
+        for (int i = 0; i < 3; i++) {
+            #ifdef DEBUG
+                Serial.println("Failed to communicate with nRF24L01");
+            #endif
             delay(1000);
         }
     } else {
-        Serial.println("nRF24L01 communication established");
+        #ifdef DEBUG
+            Serial.println("nRF24L01 communication established");
+        #endif
         delay(100);
         nrfLink.setChannel(channel);
         delay(100);
@@ -1006,103 +1027,105 @@ void setup() {
     
 }
 
-/* Handle volume control and other commands via serial interface - only for debugging 
-*/
-void handleSerialCommands() { //MARK: handleSerialCommands
-    if (Serial.available()) {
-        char input = Serial.read();
-        if (input == '+') { //MARK: Volume Up
-            // Increase volume
-            if (volumeCurrent_ < 127) {
-                volumeCurrent_++;
-                if (deviceMode_ == BT){
-                    a2dp_.set_volume(volumeCurrent_); 
-                    showVolume(volumeCurrent_);
-                } else if (deviceMode_ == WIFI) {
-                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+#ifdef DEBUG
+    /* Handle volume control and other commands via serial interface - only for debugging 
+    */
+    void handleSerialcommands() { //MARK: handleSerialcommands
+        if (Serial.available()) {
+            char input = Serial.read();
+            if (input == '+') { //MARK: Volume Up
+                // Increase volume
+                if (volumeCurrent_ < 127) {
+                    volumeCurrent_++;
+                    if (deviceMode_ == BT){
+                        a2dp_.set_volume(volumeCurrent_); 
+                        showVolume(volumeCurrent_);
+                    } else if (deviceMode_ == WIFI) {
+                        volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                    }
+                    
                 }
-                
-            }
-        } else if (input == '-') { //MARK: Volume Down
-            // Decrease volume
-            if (volumeCurrent_ > 0) {
-                volumeCurrent_--;
+            } else if (input == '-') { //MARK: Volume Down
+                // Decrease volume
+                if (volumeCurrent_ > 0) {
+                    volumeCurrent_--;
+                    if (deviceMode_ == BT){
+                        a2dp_.set_volume(volumeCurrent_);
+                        showVolume(volumeCurrent_);
+                    } else if (deviceMode_ == WIFI) {
+                        volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                    }
+                }
+            } else if (input == 'm') { //MARK: Mute
+                // Mute
+                volumeCurrent_ = 0;
+                infoUpdatedFlag_ = true; // Raise flag for the display update routine
                 if (deviceMode_ == BT){
                     a2dp_.set_volume(volumeCurrent_);
-                    showVolume(volumeCurrent_);
                 } else if (deviceMode_ == WIFI) {
-                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                        volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
+                }
+            } else if (input == 'p') { //MARK: Pause
+                // Play
+                if (deviceMode_ == BT){
+                    a2dp_.pause();
+                } else if (deviceMode_ == WIFI) {
+                    // Stop
+                    pAudio_->stopSong();
+                    setAudioShutdown(true); // Turn off amplifier
+                    stationChangedMute_ = true; // Mute audio until stream becomes stable
+                }
+            } else if (input == 's') { //MARK: Start
+                if (deviceMode_ == BT){
+                    a2dp_.play();
+                } else if (deviceMode_ == WIFI) {
+                    // Start
+                    setAudioShutdown(false); // Turn on amplifier
+                    stationChangedMute_ = false; // Unmute audio
+                    stationChanged_ = true; // Raise flag for the audio task
+                    stationUpdatedFlag_ = true; // Raise flag for display update routine
+                    infoUpdatedFlag_ = true; // Raise flag for display update routine
+                }
+            } else if (input == 'n') { //MARK: Next
+                // Next
+                if (deviceMode_ == BT){
+                    a2dp_.next();
+                } else if (deviceMode_ == WIFI) {
+                    stationIndex_ = (stationIndex_ + 1) % numStations;
+                    stationChanged_ = true; // Raise flag for the audio task
+                }
+            } else if (input == 'b') { //MARK: Previous
+                // Previous
+                if (deviceMode_ == BT) {
+                    a2dp_.previous();
+                } else if (deviceMode_ == WIFI) {
+                    stationIndex_ = (stationIndex_ + numStations - 1) % numStations;
+                    stationChanged_ = true; // Raise flag for the audio task
+                }
+            } else if (input == 'r') { //MARK: Restart
+                // Restart
+                ESP.restart();
+            } else if (input == 'w') { //MARK: WiFi
+                // Switch to WiFi mode
+                if (deviceMode_ == BT) {
+                    deviceMode_ = WIFI;
+                    EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
+                    EEPROM.commit();
+                    Serial.println("Switching to Radio!");
+                }
+            } else if (input == 'c') { //MARK: Bluetooth
+                // Switch to Bluetooth mode
+                if (deviceMode_ == WIFI) {
+                    deviceMode_ = BT;
+                    EEPROM.writeByte(0, 1); // Enter BT mode after restart
+                    EEPROM.commit();
+                    Serial.println("Switching to BT!");
+                    stopRadio(); // Close connections and clean up
                 }
             }
-        } else if (input == 'm') { //MARK: Mute
-            // Mute
-            volumeCurrent_ = 0;
-            infoUpdatedFlag_ = true; // Raise flag for the display update routine
-            if (deviceMode_ == BT){
-                a2dp_.set_volume(volumeCurrent_);
-            } else if (deviceMode_ == WIFI) {
-                    volumeCurrentChangedFlag_ = true; // Raise flag for the audio task
-            }
-        } else if (input == 'p') { //MARK: Pause
-            // Play
-            if (deviceMode_ == BT){
-                a2dp_.pause();
-            } else if (deviceMode_ == WIFI) {
-                // Stop
-                pAudio_->stopSong();
-                setAudioShutdown(true); // Turn off amplifier
-                stationChangedMute_ = true; // Mute audio until stream becomes stable
-            }
-        } else if (input == 's') { //MARK: Start
-            if (deviceMode_ == BT){
-                a2dp_.play();
-            } else if (deviceMode_ == WIFI) {
-                // Start
-                setAudioShutdown(false); // Turn on amplifier
-                stationChangedMute_ = false; // Unmute audio
-                stationChanged_ = true; // Raise flag for the audio task
-                stationUpdatedFlag_ = true; // Raise flag for display update routine
-                infoUpdatedFlag_ = true; // Raise flag for display update routine
-            }
-        } else if (input == 'n') { //MARK: Next
-            // Next
-            if (deviceMode_ == BT){
-                a2dp_.next();
-            } else if (deviceMode_ == WIFI) {
-                stationIndex_ = (stationIndex_ + 1) % numStations;
-                stationChanged_ = true; // Raise flag for the audio task
-            }
-        } else if (input == 'b') { //MARK: Previous
-            // Previous
-            if (deviceMode_ == BT) {
-                a2dp_.previous();
-            } else if (deviceMode_ == WIFI) {
-                stationIndex_ = (stationIndex_ + numStations - 1) % numStations;
-                stationChanged_ = true; // Raise flag for the audio task
-            }
-        } else if (input == 'r') { //MARK: Restart
-            // Restart
-            ESP.restart();
-        } else if (input == 'w') { //MARK: WiFi
-            // Switch to WiFi mode
-            if (deviceMode_ == BT) {
-                deviceMode_ = WIFI;
-                EEPROM.writeByte(0, 0); // Enter internet radio mode after restart
-                EEPROM.commit();
-                Serial.println("Switching to Radio!");
-            }
-        } else if (input == 'c') { //MARK: Bluetooth
-            // Switch to Bluetooth mode
-            if (deviceMode_ == WIFI) {
-                deviceMode_ = BT;
-                EEPROM.writeByte(0, 1); // Enter BT mode after restart
-                EEPROM.commit();
-                Serial.println("Switching to BT!");
-                stopRadio(); // Close connections and clean up
-            }
         }
-    }
-}        
+    }        
+#endif
 
 /*
 * Transmit the current state of the device to the nRFLink for back-end control
@@ -1127,14 +1150,18 @@ void nrfTransmit() {
         RF24NetworkHeader header(otherNode);
         bool ok = nrfNetwork.write(header, &payload, sizeof(payload));
         if (ok) {
-            Serial.println("Message sent");
+            #ifdef DEBUG
+                Serial.println("Message sent");
+            #endif
             // Update the previous state
             prevState.playState = playstate;
             prevState.deviceMode = deviceMode_;
             prevState.volume = volumeCurrent_;
             prevState.batteryLevel = batteryLevel_;
         } else {
-            Serial.println("Message failed");
+            #ifdef DEBUG
+                Serial.println("Message failed");
+            #endif
         }
 
 
@@ -1147,25 +1174,33 @@ void nrfTransmit() {
 void nrfCheck() {
     nrfNetwork.update();
     while (nrfNetwork.available()) {
-        Serial.println("Received package!");
+        #ifdef DEBUG
+            Serial.println("Received package!");
+        #endif
         RF24NetworkHeader header;
         nrfReceivePayload_t payload;
         nrfNetwork.read(header, &payload, sizeof(payload));
-        Serial.print(F("Received packet: url="));
-        Serial.print(payload.url);
-        Serial.print(F(", isPlaying="));
-        Serial.println(payload.isPlaying);
-        Serial.print(F(", volume="));
-        Serial.println(payload.volume);
-        Serial.print(F(", changed="));
-        Serial.println(payload.paramBitMask,BIN);
+        #ifdef DEBUG
+            Serial.print(F("Received packet: url="));
+            Serial.print(payload.url);
+            Serial.print(F(", isPlaying="));
+            Serial.println(payload.isPlaying);
+            Serial.print(F(", volume="));
+            Serial.println(payload.volume);
+            Serial.print(F(", changed="));
+            Serial.println(payload.paramBitMask,BIN);
+        #endif
         if (payload.paramBitMask & (1 << 0)) { // Check bit 0
-            Serial.println("URL has changed");
+            #ifdef DEBUG
+                Serial.println("URL has changed");
+            #endif
             urlPlaceholder_ = String(payload.url);
             stationChanged_ = true;
         }
         if (payload.paramBitMask & (1 << 1)) { // Check bit 1
-            Serial.println("Play state has changed");
+            #ifdef DEBUG
+                Serial.println("Play state has changed");
+            #endif
             if (payload.isPlaying) {
                 if (deviceMode_ == BT){
                     a2dp_.play();
@@ -1189,7 +1224,9 @@ void nrfCheck() {
             }
         }
         if (payload.paramBitMask & (1 << 2)) { // Check bit 2
-            Serial.println("Volume has changed");
+            #ifdef DEBUG
+                Serial.println("Volume has changed");
+            #endif
             volumeCurrent_ = payload.volume;
             if (deviceMode_ == BT){
                 a2dp_.set_volume(volumeCurrent_); 
@@ -1220,8 +1257,10 @@ void nrfCheck() {
         if (newDeviceMode != deviceMode_) {
             // Update the device mode
             deviceMode_ = newDeviceMode;
-            Serial.print("Device mode has changed to ");
-            Serial.println(deviceMode_);
+            #ifdef DEBUG
+                Serial.print("Device mode has changed to ");
+                Serial.println(deviceMode_);
+            #endif
             deviceModeChanged_ = true;
         }
     }
@@ -1242,27 +1281,37 @@ void processBatteryLevel(void){
 */
 void changeDeviceMode() {
     int8_t byteToWrite = MOD_IN_ & 0x04 | (deviceMode_ & 0x03);
-    Serial.print("byteToWrite: ");
-    Serial.println(byteToWrite,BIN);
+    #ifdef DEBUG
+        Serial.print("byteToWrite: ");
+        Serial.println(byteToWrite,BIN);
+    #endif
     if (deviceMode_ == WIFI) {
         EEPROM.writeByte(0, byteToWrite); // Enter BT mode after restart
         EEPROM.commit();
-        Serial.println("Switching to BT!");
+        #ifdef DEBUG
+            Serial.println("Switching to BT!");
+        #endif
         stopRadio(); // Close connections and clean up
         ESP.restart();
     }
     else if (deviceMode_ == BT) {
         EEPROM.writeByte(0, byteToWrite); // Enter internet radio mode after restart
         EEPROM.commit();
-        Serial.println("Switching to WIFI!");
+        #ifdef DEBUG
+            Serial.println("Switching to WIFI!");
+        #endif
         ESP.restart();
     } else if (deviceMode_ == CHG) {
-        Serial.println("Switching to CHG!");
+        #ifdef DEBUG
+            Serial.println("Switching to CHG!");
+        #endif
         EEPROM.writeByte(0, byteToWrite); // Enter charging mode after restart
         EEPROM.commit();
         ESP.restart();
     } else if (deviceMode_ == NONE) {
-        Serial.println("Switching to NONE!");
+        #ifdef DEBUG
+            Serial.println("Switching to NONE!");
+        #endif
         EEPROM.writeByte(0, byteToWrite); // Enter standby mode after restart
         EEPROM.commit();
         ESP.restart();
@@ -1392,19 +1441,20 @@ void loop() {
 
 //mainly optional callbacks for the audio library, left in for future use
 void audio_info(const char *info){ 
-    //Serial.print("info        "); Serial.println(info);
 }
 void audio_id3data(const char *info){  //id3 metadata 
-    // Serial.print("id3data     ");Serial.println(info);
 }
 void audio_eof_mp3(const char *info){  //end of file 
-    // Serial.print("eof_mp3     ");Serial.println(info);
+
 }
 void audio_showstation(const char *info){ 
     stationStr_ = info;
     stationUpdatedFlag_ = true; // Raise flag for the display update routine
 
-    // Serial.print("station     ");Serial.println(info);
+    #ifdef DEBUG
+        Serial.print("station     ");
+        Serial.println(info);
+    #endif
 }
 void audio_showstreamtitle(const char *info){ 
     if (deviceMode_ == WIFI) {
@@ -1418,22 +1468,19 @@ void audio_showstreamtitle(const char *info){
     }
     infoUpdatedFlag_ = true; // Raise flag for the display update routine
 
-    // Serial.print("streamtitle ");Serial.println(info);
+
 }
 void audio_bitrate(const char *info){ 
-    // Serial.print("bitrate     ");Serial.println(info);
 }
 void audio_commercial(const char *info){  //duration in sec //audio_commercial
-    // Serial.print("commercial  ");Serial.println(info);
 }
 void audio_icyurl(const char *info){  //homepage 
-    // Serial.print("icyurl      ");Serial.println(info);
 }
+
 void audio_lasthost(const char *info){  //stream URL played 
-    // Serial.print("lasthost    ");Serial.println(info);
 }
+
 void audio_eof_speech(const char *info){ 
-    // Serial.print("eof_speech  ");Serial.println(info);
 }
 
 /*
@@ -1463,15 +1510,12 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
     }
     
     infoUpdatedFlag_ = true; // Raise flag for the display update routine
-    // Serial.printf("==> AVRC metadata rsp: attribute id 0x%x, %s\n", id, text);
 }
 
 /*
 * connection state callback for the bluetooth audio library
 */
 void a2dp_connection_state_changed(esp_a2d_connection_state_t state, void*) {
-
-    //Serial.print("Connection state: %d", state);
 
     if (state != ESP_A2D_CONNECTION_STATE_CONNECTED) {
         infoStr_ = "not connected";

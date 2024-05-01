@@ -111,6 +111,7 @@ G2 --> |Yes| H2[Volume Change ++]
 
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'actorBkg': '#0f295d', 'actorTextColor': '#FFFFFF','signalColor': '#000000'}}}%%
 sequenceDiagram
     participant ESP32-Speaker
     participant ESP32-Hub
@@ -118,12 +119,14 @@ sequenceDiagram
     participant Stream-URL
     participant Thunkable App
     participant User
-    User->>Thunkable App: Choose new station, change volume, change device mode, change status
-    Thunkable App->>Azure Backend: New station request
-    ESP32-Hub->>Azure Backend: HTTP GET update (every 5 seconds)
-    Azure Backend->>ESP32-Hub: JSON with new station, volume, etc.
-    ESP32-Hub->>ESP32-Speaker: JSON converted to nRF Network Package
+    User->>Thunkable App: Change parameters
+    Thunkable App->>Azure Backend: New parameter request
+    ESP32-Hub->>Azure Backend: HTTP GET (every 5 sec.)
+    Azure Backend->>ESP32-Hub: JSON with parameters.
+    ESP32-Hub->>ESP32-Speaker: nRFNetwork Package
     ESP32-Speaker->>ESP32-Speaker: Process nRF Network Package based on bitmask
     ESP32-Speaker->>ESP32-Speaker: Change volume, station, device mode, status
     ESP32-Speaker->>Stream-URL: Connect to new station
+    ESP32-Speaker->>ESP32-Hub: nrfNetwork Status Update
+    ESP32-Hub->>Azure Backend: HTTP POST
 ```
