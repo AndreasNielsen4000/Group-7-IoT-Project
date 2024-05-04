@@ -1472,51 +1472,6 @@ void loop() {
 }
 
 
-//mainly optional callbacks for the audio library, left in for future use or debugging
-//Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
-
-void audio_info(const char *info){ 
-}
-void audio_id3data(const char *info){  //id3 metadata 
-}
-void audio_eof_mp3(const char *info){  //end of file 
-
-}
-void audio_showstation(const char *info){ 
-    stationStr_ = info;
-    stationUpdatedFlag_ = true; // Raise flag for the display update routine
-
-    #ifdef DEBUG
-        Serial.print("station     ");
-        Serial.println(info);
-    #endif
-}
-void audio_showstreamtitle(const char *info){ 
-    if (deviceMode_ == WIFI) {
-        infoStr_ = info;
-    }
-    else {
-        std::string title(metadata.title);
-        std::string artist(metadata.artist);
-        infoStr_ = (title + " - " + artist).c_str();
-        //infoStr_ = metadata.title + " - " + metadata.artist;
-    }
-    infoUpdatedFlag_ = true; // Raise flag for the display update routine
-
-
-}
-void audio_bitrate(const char *info){ 
-}
-void audio_commercial(const char *info){  //duration in sec //audio_commercial
-}
-void audio_icyurl(const char *info){  //homepage 
-}
-
-void audio_lasthost(const char *info){  //stream URL played 
-}
-
-void audio_eof_speech(const char *info){ 
-}
 
 /*
 * metadata callback for the bluetooth audio library
@@ -1565,3 +1520,50 @@ void avrc_volume_change_callback(int vol) {
     volumeCurrent_ = vol;
     volumeCurrentChangedFlag_ = true;
 }
+
+//mainly optional callbacks for the audio library, left in for future use or debugging
+//Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
+/* 
+void audio_info(const char *info){ 
+}
+void audio_id3data(const char *info){  //id3 metadata 
+}
+void audio_eof_mp3(const char *info){  //end of file 
+
+}
+void audio_showstation(const char *info){ 
+    stationStr_ = info;
+    stationUpdatedFlag_ = true; // Raise flag for the display update routine
+
+    #ifdef DEBUG
+        Serial.print("station     ");
+        Serial.println(info);
+    #endif
+}
+void audio_showstreamtitle(const char *info){ 
+    if (deviceMode_ == WIFI) {
+        infoStr_ = info;
+    }
+    else {
+        std::string title(metadata.title);
+        std::string artist(metadata.artist);
+        infoStr_ = (title + " - " + artist).c_str();
+        //infoStr_ = metadata.title + " - " + metadata.artist;
+    }
+    infoUpdatedFlag_ = true; // Raise flag for the display update routine
+
+
+}
+void audio_bitrate(const char *info){ 
+}
+void audio_commercial(const char *info){  //duration in sec //audio_commercial
+}
+void audio_icyurl(const char *info){  //homepage 
+}
+
+void audio_lasthost(const char *info){  //stream URL played 
+}
+
+void audio_eof_speech(const char *info){ 
+}
+ */
