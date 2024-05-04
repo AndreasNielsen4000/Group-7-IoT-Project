@@ -7,9 +7,29 @@
 #include <EEPROM.h>
 #define _TIMERINTERRUPT_LOGLEVEL_     3
 #include "ESP32_New_TimerInterrupt.h"
-//#include <HTTPClient.h> //https://randomnerdtutorials.com/esp32-http-get-post-arduino/
 #include <RF24.h>
 #include <RF24Network.h>
+
+/*
+* Description:
+* This is code for the Soundwich Bluetooth/WiFi speaker project by Group 7 in the IoT course at DTU.
+*
+* This is the final project in the 34346 Networking technologies and application development for the Internet of Things (IoT) at DTU
+*
+* The project was made by:
+* Alexander Nordentoft - s176361
+* Andreas Nielsen - s203833
+* Anton Per Rønnedal - s203821
+* Rasmus Kurdahl-Martinsen - s194337
+* Sergio Piqueras Moreno - s232104
+* 
+* This project would not have worked without the work done by Ernst Sikora on his M5StickC_WebRadio project.
+* https://github.com/esikora/M5StickC_WebRadio
+* The base structure of the code and the handling of A2DP and WiFi is based on his work.
+* 
+* To connect to WiFi, the user should create their own WiFiCredentials.cpp file with contents as described in WifiCredentials.h
+*/
+
 
 //#define DEBUG //Uncomment to enable debug messages
 
@@ -116,7 +136,7 @@ const uint16_t thisNode = 01;
 const uint16_t otherNode = 00;
 
 
-//TEST STATIONS:
+//TEST STATIONS, Radio BOB is loaded as default because we like it. The rest are left in for use when debugging is active.
 /** Web radio stream URLs */
 const String stationURLs[] = {
     "http://streams.radiobob.de/bob-national/mp3-192/streams.radiobob.de/",
@@ -549,19 +569,30 @@ void showPlayState(bool isConnected) {
         display.print("P:");
         if (isConnected) {
             display.print("Y");
-            digitalWrite(PIN_AMP_EN,HIGH);
         }
         else {
             display.print("N");
-            digitalWrite(PIN_AMP_EN,LOW);
         }
         display.display();
+    }
+    if (isConnected) {
+        #ifdef DEBUG
+            Serial.println("Playing");
+        #endif
+        digitalWrite(PIN_AMP_EN,HIGH);
+    }
+    else {
+        #ifdef DEBUG
+            Serial.println("Not playing");
+        #endif
+        digitalWrite(PIN_AMP_EN,LOW);
     }
 }
 
 /**
  * Connects to the specified WiFi network and starts the device in internet radio mode.
- * Audio task is started.
+ * Audio task is started. 
+ * Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
  */
 void startRadio() {
     if (pAudio_ == nullptr) {
@@ -645,8 +676,9 @@ void startRadio() {
 }
 
 /**
- * Stops the internet radio including the audio tasks.
- */
+ * Stops the internet radio including the audio tasks. 
+ * Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
+ */ 
 void stopRadio() {
 
     if (pAudio_ != nullptr) {
@@ -690,6 +722,7 @@ void stopRadio() {
 
 /**
  * Starts the device in bluetooth sink (BT) mode.
+ * Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
  */
 void startA2dp() {
     i2s_pin_config_t pinConfig = {
@@ -767,6 +800,7 @@ void setAudioShutdown(bool b) {
 
 /**
  * audioProcessing task, which processes the audio stream data and controls the audio output. In case of a web radio stream, the task also handles the connection to the stream.
+ * Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
  */
 void audioProcessing(void *p) {
     
@@ -1317,8 +1351,8 @@ void changeDeviceMode() {
     }
 }
 
-void loop() { 
-    
+
+void loop() {     
     //If device mode changed flag, change the device mode
     if (deviceModeChanged_) {
         nrfTransmit();
@@ -1438,49 +1472,6 @@ void loop() {
 }
 
 
-//mainly optional callbacks for the audio library, left in for future use
-void audio_info(const char *info){ 
-}
-void audio_id3data(const char *info){  //id3 metadata 
-}
-void audio_eof_mp3(const char *info){  //end of file 
-
-}
-void audio_showstation(const char *info){ 
-    stationStr_ = info;
-    stationUpdatedFlag_ = true; // Raise flag for the display update routine
-
-    #ifdef DEBUG
-        Serial.print("station     ");
-        Serial.println(info);
-    #endif
-}
-void audio_showstreamtitle(const char *info){ 
-    if (deviceMode_ == WIFI) {
-        infoStr_ = info;
-    }
-    else {
-        std::string title(metadata.title);
-        std::string artist(metadata.artist);
-        infoStr_ = (title + " - " + artist).c_str();
-        //infoStr_ = metadata.title + " - " + metadata.artist;
-    }
-    infoUpdatedFlag_ = true; // Raise flag for the display update routine
-
-
-}
-void audio_bitrate(const char *info){ 
-}
-void audio_commercial(const char *info){  //duration in sec //audio_commercial
-}
-void audio_icyurl(const char *info){  //homepage 
-}
-
-void audio_lasthost(const char *info){  //stream URL played 
-}
-
-void audio_eof_speech(const char *info){ 
-}
 
 /*
 * metadata callback for the bluetooth audio library
@@ -1529,3 +1520,50 @@ void avrc_volume_change_callback(int vol) {
     volumeCurrent_ = vol;
     volumeCurrentChangedFlag_ = true;
 }
+
+//mainly optional callbacks for the audio library, left in for future use or debugging
+//Mainly from the 'M5StickC_WebRadio' project by Ernst Sikora.
+/* 
+void audio_info(const char *info){ 
+}
+void audio_id3data(const char *info){  //id3 metadata 
+}
+void audio_eof_mp3(const char *info){  //end of file 
+
+}
+void audio_showstation(const char *info){ 
+    stationStr_ = info;
+    stationUpdatedFlag_ = true; // Raise flag for the display update routine
+
+    #ifdef DEBUG
+        Serial.print("station     ");
+        Serial.println(info);
+    #endif
+}
+void audio_showstreamtitle(const char *info){ 
+    if (deviceMode_ == WIFI) {
+        infoStr_ = info;
+    }
+    else {
+        std::string title(metadata.title);
+        std::string artist(metadata.artist);
+        infoStr_ = (title + " - " + artist).c_str();
+        //infoStr_ = metadata.title + " - " + metadata.artist;
+    }
+    infoUpdatedFlag_ = true; // Raise flag for the display update routine
+
+
+}
+void audio_bitrate(const char *info){ 
+}
+void audio_commercial(const char *info){  //duration in sec //audio_commercial
+}
+void audio_icyurl(const char *info){  //homepage 
+}
+
+void audio_lasthost(const char *info){  //stream URL played 
+}
+
+void audio_eof_speech(const char *info){ 
+}
+ */
