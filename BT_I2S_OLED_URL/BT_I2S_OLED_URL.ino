@@ -85,7 +85,7 @@ struct Metadata {
 };
 
 //Device name - used for Bluetooth
-const char* deviceName = "FrankenRadio";
+const char* deviceName = "Soundwich";
 
 //Max volume, based on 7-bit volume control from Bluetooth
 const uint8_t volumeMax = 127;
@@ -346,9 +346,8 @@ bool IRAM_ATTR Timer3_ISR(void * timerNo){
             MOD_IN_ = (deviceMode_ & 0x07); 
             holdCounter_ = 0;
             deviceModeChanged_ = true;
-        } else {
-        digitalWrite(PIN_PSU_EN,LOW);
         }
+        digitalWrite(PIN_PSU_EN,HIGH);
         break;
     case NONE:
         if (holdCounter_ > BTN_LONG_PRESS && BTN_IN) {
