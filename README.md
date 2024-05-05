@@ -72,8 +72,7 @@ The Thunkable app is an app for controlling the speaker system using the Azure b
 
 ## Overview of Communication
 
-https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/7326b5ff-cd74-4e78-8b7f-2eaa23e2e8a3
-
+![ComFlow](ComFlow.gif)
 
 ## Video Preview of Functionality
 
