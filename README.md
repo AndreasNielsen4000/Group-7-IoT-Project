@@ -78,7 +78,7 @@ The app works by using HTTP GET to search and filter Internet Radio URLs and the
 
 ## Overview of Communication
 
-![ComFlow](ComFlow.gif)
+![ComFlow](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/00e40e57-ae0d-4dc5-aa39-0b11cc793b4e)
 
 ## Video Preview of Functionality
 In the following video, the device is powered on from the off-state, going into Bluetooth mode. The rotary encoder is turned up, issuing a play request to the connected iPhone. 
