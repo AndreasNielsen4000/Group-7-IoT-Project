@@ -77,3 +77,31 @@ The Thunkable app is an app for controlling the speaker system using the Azure b
 ## Video Preview of Functionality
 
 https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/1d90d405-0698-4473-90d2-c6516d68bdfd
+
+## Work Distribution
+
+| Responsibility              | Main  | Secondary/Secondaries |
+|-----------------------------|-------|-----------------------|
+| **Mobile App**              | ------| ------                |
+| **OLED**                    | ------| ------                |
+| **LEDs**                    | ------| ------                |
+| **PCBs**                    | ------| ------                |
+| **3D Design**               | s232104 | 233845              |
+| **Web Server Back-end**     | ------| ------                |
+| **Web Server Front-end**    | ------| ------                |
+| **IoT bridge to back-end**  | ------| ------                |
+| **nRF**                     | ------| s232104               |
+| **nRF Network**             | ------| s232104               |
+| **WiFi**                    | ------| ------                |
+| **Bluetooth**               | ------| ------                |
+| **Azure**                   | ------| ------                |
+| **Code Integration**        | ------| ------                |
+| **Internet Radio**          | ------|                       |
+| **Battery Reading**         | ------|                       |
+| **Power Delivery**          | ------|                       |
+| **BMS**                     | ------|                       |
+| **Rotary encoder**          | ------|                       |
+| **Final Integration**       | ------|                       |
+| **Report**                  | All   |                       |
+| **Poster**                  | All   |                       |
+
