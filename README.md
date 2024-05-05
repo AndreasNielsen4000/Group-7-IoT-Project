@@ -90,7 +90,7 @@ https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/1d90d40
 
 | Responsibility                | Main                                 | Secondary            |
 |-------------------------------|--------------------------------------|----------------------|
-| **Mobile App**                | Andreas                              | ------               |
+| **Mobile App**                | Andreas                              | Alexander            |
 | **OLED**                      | Alexander                            | ------               |
 | **LEDs**                      | Sergio                               | ------               |
 | **PCBs**                      | Anton                                | ------               |
@@ -103,7 +103,7 @@ https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/1d90d40
 | **nRF**                       | Sergio                               | Rasmus, Andreas      |
 | **nRF Network**               | Andreas                              | Alexander, Sergio    |
 | **WiFi (mode)**               | Alexander                            | Andreas              |
-| **Bluetooth (mode)**          | Alexander                            | ------               |
+| **Bluetooth (mode)**          | Alexander                            | Andreas              |
 | **EEPROM**                    | Alexander                            | ------               |
 | **Battery Reading**           | Rasmus                               | ------               |
 | **Power Delivery**            | Anton                                | ------               |
