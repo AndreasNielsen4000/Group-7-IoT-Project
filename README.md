@@ -88,28 +88,30 @@ https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/1d90d40
 
 ## Work Distribution
 
-| Responsibility              | Main  | Secondary/Secondaries |
-|-----------------------------|-------|-----------------------|
-| **Mobile App**              | ------| ------                |
-| **OLED**                    | ------| ------                |
-| **LEDs**                    | ------| ------                |
-| **PCBs**                    | ------| ------                |
-| **3D Design**               | s232104 | 233845              |
-| **Web Server Back-end**     | ------| ------                |
-| **Web Server Front-end**    | ------| ------                |
-| **IoT bridge to back-end**  | ------| ------                |
-| **nRF**                     | ------| s232104               |
-| **nRF Network**             | ------| s232104               |
-| **WiFi**                    | ------| ------                |
-| **Bluetooth**               | ------| ------                |
-| **Azure**                   | ------| ------                |
-| **Code Integration**        | ------| ------                |
-| **Internet Radio**          | ------|                       |
-| **Battery Reading**         | ------|                       |
-| **Power Delivery**          | ------|                       |
-| **BMS**                     | ------|                       |
-| **Rotary encoder**          | ------|                       |
-| **Final Integration**       | ------|                       |
-| **Report**                  | All   |                       |
-| **Poster**                  | All   |                       |
+| Responsibility                | Main                                 | Secondary            |
+|-------------------------------|--------------------------------------|----------------------|
+| **Mobile App**                | Andreas                              | ------               |
+| **OLED**                      | Alexander                            | ------               |
+| **LEDs**                      | Sergio                               | ------               |
+| **PCBs**                      | Anton                                | ------               |
+| **Soldering**                 | Anton                                | ------               |
+| **3D Design**                 | Sergio                               | Hugo                 |
+| **Azure**                     | Rasmus                               | Andreas              |
+| **Back-end**                  | Andreas                              | Rasmus               |
+| **Front-end**                 | Andreas                              | Alexander            |
+| **IoT bridge**                | Rasmus                               | Andreas, Alexander   |
+| **nRF**                       | Sergio                               | Rasmus, Andreas      |
+| **nRF Network**               | Andreas                              | Alexander, Sergio    |
+| **WiFi (mode)**               | Alexander                            | Andreas              |
+| **Bluetooth (mode)**          | Alexander                            | ------               |
+| **EEPROM**                    | Alexander                            | ------               |
+| **Battery Reading**           | Rasmus                               | ------               |
+| **Power Delivery**            | Anton                                | ------               |
+| **BMS**                       | Anton                                | ------               |
+| **Rotary encoder**            | Anton & Alexander                    | ------               |
+| **State Machine**             | Anton                                | ------               |
+| **Code Integration**          | Andreas & Alexander                  | Anton                |
+| **Final prototype assembly**  | Alexander, Anton & Sergio            | ------               |
+| **Report**                    | All                                  | ------               |
+| **Poster**                    | All                                  | ------               |
 
