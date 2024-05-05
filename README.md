@@ -68,13 +68,13 @@ The Azure backend consists of a WebAPI for managing the speaker system. The WebA
 
 ## Description of the Thunkable App
 
+*The block-code for the app can be found here ![Thunkable App](https://x.thunkable.com/projectPage/65fbfc2f66a304c1d58aabaa)*
+
 Using Thunkable an app was created for controlling the speaker system using the Azure backend. The app can be used to change the mode of the speaker system, search for new Internet Radio stations, change Internet Radio station and change the volume.
 The app works by using HTTP GET to search and filter Internet Radio URLs and then HTTP POST to the Azure with updated device parameters.
 
-![AppWelcomeScreen](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/c201bbb4-87cb-4e6d-9503-cf3c1d456721)
+![AppWelcomeScreen](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/0f5486ab-820b-46dd-a328-a4ce564d903d)
 ![AppSearchScreen](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/c88ad75c-45f2-4b4e-af0f-404cb299d767)
-
-The block-code for the app can be found here ![Thunkable App](https://x.thunkable.com/projectPage/65fbfc2f66a304c1d58aabaa)
 
 ## Overview of Communication
 
