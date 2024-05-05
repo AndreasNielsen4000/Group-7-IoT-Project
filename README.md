@@ -29,6 +29,8 @@ The project is a wireless speaker system that can play music from a Bluetooth or
 
 ## Description of the Speaker System
 
+**Code in BT_I2S_URL_OLED**
+
 The speaker system consists of a speaker with an ESP32-WROOM-32 microcontroller. The speaker is powered by a custom power board with USB-C PD and a battery management system. The speaker can be powered by three 18650 batteries or by USB-C PD. The battery can be charged using USB-C PD.
 
 The audio is played by a custom audio board with a class D amplifier.
@@ -54,9 +56,13 @@ When in Charge mode, the speaker will charge the battery and show the battery le
 
 ## Description of the IoT Bridge
 
+*Code in NRF_COM_HUB*
+
 The IoT Bridge consists of an ESP32-WROOM-32 microcontroller and an nRF24L01 module. The IoT Bridge is connected to the Azure backend using WiFi. The IoT Bridge sends a request to the Azure backend 5 second to check for any changes in the data. If the data has changed, the IoT Bridge sends the new data to the speaker system. The IoT Bridge receives data from the speaker system and sends it to the Azure backend.
 
 ## Description of the Azure Backend
+
+*Code in [![https://github.com/AndreasNielsen4000/azureradioapi]https://github.com/AndreasNielsen4000/azureradioapi]*
 
 The Azure backend consists of a WebAPI for managing the speaker system. The WebAPI is connected to the IoT Bridge using WiFi. The WebAPI receives data from the IoT Bridge and sends data to the IoT Bridge. The WebAPI has a simple front end for controlling the speaker system.
 
