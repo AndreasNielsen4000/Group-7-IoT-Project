@@ -29,6 +29,8 @@ The project is a wireless speaker system that can play music from a Bluetooth or
 
 ## Description of the Speaker System
 
+*Code in BT_I2S_URL_OLED*
+
 The speaker system consists of a speaker with an ESP32-WROOM-32 microcontroller. The speaker is powered by a custom power board with USB-C PD and a battery management system. The speaker can be powered by three 18650 batteries or by USB-C PD. The battery can be charged using USB-C PD.
 
 The audio is played by a custom audio board with a class D amplifier.
@@ -54,24 +56,62 @@ When in Charge mode, the speaker will charge the battery and show the battery le
 
 ## Description of the IoT Bridge
 
+*Code in NRF_COM_HUB*
+
 The IoT Bridge consists of an ESP32-WROOM-32 microcontroller and an nRF24L01 module. The IoT Bridge is connected to the Azure backend using WiFi. The IoT Bridge sends a request to the Azure backend 5 second to check for any changes in the data. If the data has changed, the IoT Bridge sends the new data to the speaker system. The IoT Bridge receives data from the speaker system and sends it to the Azure backend.
 
 ## Description of the Azure Backend
+
+*Code in https://github.com/AndreasNielsen4000/azureradioapi]https://github.com/AndreasNielsen4000/azureradioapi*
 
 The Azure backend consists of a WebAPI for managing the speaker system. The WebAPI is connected to the IoT Bridge using WiFi. The WebAPI receives data from the IoT Bridge and sends data to the IoT Bridge. The WebAPI has a simple front end for controlling the speaker system.
 
 ## Description of the Thunkable App
 
-The Thunkable app is an app for controlling the speaker system using the Azure backend. The app can be used to change the mode of the speaker system, search for new Internet Radio stations, change Internet Radio station and change the volume.
+*The block-code for the app can be found here https://x.thunkable.com/projectPage/65fbfc2f66a304c1d58aabaa*
 
+Using Thunkable an app was created for controlling the speaker system using the Azure backend. The app can be used to change the mode of the speaker system, search for new Internet Radio stations, change Internet Radio station and change the volume.
+The app works by using HTTP GET to search and filter Internet Radio URLs and then HTTP POST to the Azure with updated device parameters.
+
+![AppWelcomeScreen](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/0f5486ab-820b-46dd-a328-a4ce564d903d)
+![AppSearchScreen](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/c88ad75c-45f2-4b4e-af0f-404cb299d767)
+
+## Overview of Communication
+
+![ComFlow](https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/00e40e57-ae0d-4dc5-aa39-0b11cc793b4e)
 
 ## Video Preview of Functionality
+In the following video, the device is powered on from the off-state, going into Bluetooth mode. The rotary encoder is turned up, issuing a play request to the connected iPhone. 
+Then the device is switched over to WiFi mode and playing Radio BOB!.
 
-https://github.com/AndreasNielsen4000/Group-7-IoT-Project/blob/main/Demo_Video.mp4
+https://github.com/AndreasNielsen4000/Group-7-IoT-Project/assets/8758884/1d90d405-0698-4473-90d2-c6516d68bdfd
 
+## Work Distribution
 
-
-
-
-
+| Responsibility                | Main                                 | Secondary            |
+|-------------------------------|--------------------------------------|----------------------|
+| **Mobile App**                | Andreas                              | Alexander            |
+| **OLED**                      | Alexander                            | ------               |
+| **LEDs**                      | Sergio                               | ------               |
+| **PCBs**                      | Anton                                | ------               |
+| **Soldering**                 | Anton                                | ------               |
+| **3D Design**                 | Sergio                               | Hugo                 |
+| **Azure**                     | Rasmus                               | Andreas              |
+| **Back-end**                  | Andreas                              | Rasmus               |
+| **Front-end**                 | Andreas                              | Alexander            |
+| **IoT bridge**                | Rasmus                               | Andreas, Alexander   |
+| **nRF**                       | Sergio                               | Rasmus, Andreas      |
+| **nRF Network**               | Andreas                              | Alexander, Sergio    |
+| **WiFi (mode)**               | Alexander                            | Andreas              |
+| **Bluetooth (mode)**          | Alexander                            | Andreas              |
+| **EEPROM**                    | Alexander                            | ------               |
+| **Battery Reading**           | Rasmus                               | ------               |
+| **Power Delivery**            | Anton                                | ------               |
+| **BMS**                       | Anton                                | ------               |
+| **Rotary encoder**            | Anton & Alexander                    | ------               |
+| **State Machine**             | Anton                                | ------               |
+| **Code Integration**          | Andreas & Alexander                  | Anton                |
+| **Final prototype assembly**  | Alexander, Anton & Sergio            | ------               |
+| **Report**                    | All                                  | ------               |
+| **Poster**                    | All                                  | ------               |
 
